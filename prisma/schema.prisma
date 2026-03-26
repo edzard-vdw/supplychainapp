@@ -1,0 +1,621 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── AUTH ────────────────────────────────────────────────────
+
+enum Role {
+  ADMIN
+  SUPPLIER
+  VIEWER
+}
+
+model User {
+  id         Int       @id @default(autoincrement())
+  email      String    @unique
+  name       String
+  password   String
+  role       Role      @default(SUPPLIER)
+  supplierId Int?      @map("supplier_id")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  supplier Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+
+  @@map("users")
+}
+
+// ─── SUPPLIERS ──────────────────────────────────────────────
+
+enum SupplierType {
+  GROWER
+  SCOURER
+  SPINNER
+  KNITTER
+  FINISHER
+  RETAILER
+  OTHER
+}
+
+model Supplier {
+  id          Int          @id @default(autoincrement())
+  name        String       @unique
+  type        SupplierType @default(KNITTER)
+  country     String?
+  address     String?      @db.Text
+  contactName String?      @map("contact_name")
+  contactEmail String?     @map("contact_email")
+  phone       String?
+  website     String?
+  notes       String?      @db.Text
+  isActive    Boolean      @default(true) @map("is_active")
+  externalId  Int?         @unique @map("external_id")
+
+  users            User[]
+  orders           Order[]
+  productionRuns   ProductionRun[]
+  impactRecords    SupplierImpact[]
+  facilityProfile  FacilityProfile?
+  certifications   SupplierCertification[]
+  yarnDeliveries   YarnDelivery[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("suppliers")
+}
+
+// ─── FACILITY PROFILE (one per supplier) ────────────────
+
+model FacilityProfile {
+  id              Int     @id @default(autoincrement())
+  supplierId      Int     @unique @map("supplier_id")
+
+  // Energy
+  energySource    String? @map("energy_source")         // e.g. "Grid + 60% Solar"
+  renewablePct    Float?  @map("renewable_pct")          // 0-100
+  annualEnergyKwh Float?  @map("annual_energy_kwh")
+
+  // Water
+  waterSource     String? @map("water_source")           // e.g. "Municipal + Rainwater"
+  annualWaterL    Float?  @map("annual_water_litres")
+  waterRecyclingPct Float? @map("water_recycling_pct")   // 0-100
+
+  // Waste
+  wasteManagement String? @map("waste_management")       // e.g. "Recycling program, zero landfill"
+  annualWasteKg   Float?  @map("annual_waste_kg")
+
+  // Facility info
+  facilitySize    Float?  @map("facility_size_sqm")      // square metres
+  employeeCount   Int?    @map("employee_count")
+  operatingHours  String? @map("operating_hours")        // e.g. "Mon-Fri 8am-6pm"
+
+  notes           String? @db.Text
+
+  supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("facility_profiles")
+}
+
+// ─── SUPPLIER CERTIFICATIONS ────────────────────────────
+
+model SupplierCertification {
+  id             Int      @id @default(autoincrement())
+  supplierId     Int      @map("supplier_id")
+  name           String                                   // e.g. "GOTS", "Oeko-Tex", "RWS"
+  certNumber     String?  @map("cert_number")
+  issuedBy       String?  @map("issued_by")
+  validFrom      DateTime? @map("valid_from")
+  validUntil     DateTime? @map("valid_until")
+  documentUrl    String?  @map("document_url")
+  notes          String?  @db.Text
+
+  supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([supplierId])
+  @@map("supplier_certifications")
+}
+
+// ─── SUPPLIER IMPACT DATA ───────────────────────────────
+
+enum ImpactCategory {
+  GHG
+  WATER
+  ENERGY
+  WASTE
+  LAND_USE
+  BIODIVERSITY
+  CHEMICAL
+}
+
+enum ImpactScope {
+  FACILITY      // Annual/periodic facility-level data
+  PRODUCTION_RUN // Per-run resource consumption
+}
+
+enum ImpactDataQuality {
+  MEASURED
+  ESTIMATED
+  BENCHMARKED
+}
+
+enum ImpactStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
+model SupplierImpact {
+  id              Int              @id @default(autoincrement())
+  supplierId      Int              @map("supplier_id")
+  productionRunId Int?             @map("production_run_id")
+  scope           ImpactScope      @default(FACILITY)
+  category        ImpactCategory
+  value           Float
+  unit            String                                          // kgCO2e, litres, kWh, kg, m²
+  dataQuality     ImpactDataQuality @default(BENCHMARKED) @map("data_quality")
+  status          ImpactStatus     @default(DRAFT)
+  period          String?                                         // e.g. "2026-Q1", "2026-03"
+  notes           String?          @db.Text
+  certificationRef String?         @map("certification_ref")      // link to cert document
+  reviewedBy      Int?             @map("reviewed_by")
+  reviewedAt      DateTime?        @map("reviewed_at")
+
+  supplier      Supplier       @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  productionRun ProductionRun? @relation(fields: [productionRunId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([supplierId])
+  @@index([productionRunId])
+  @@index([category, supplierId])
+  @@map("supplier_impacts")
+}
+
+// ─── MASTER COLOUR MAP ──────────────────────────────────
+
+model ColourMap {
+  id              Int      @id @default(autoincrement())
+  millColourCode  String   @unique @map("mill_colour_code")   // e.g. "8M1425"
+  millColourName  String?  @map("mill_colour_name")           // e.g. "GREY 45"
+  sheepIncName    String   @map("sheep_inc_name")             // e.g. "Slate Grey"
+  sheepIncCode    String?  @map("sheep_inc_code")             // e.g. "CGREY"
+  hexValue        String?  @map("hex_value")
+  yarnMill        String?  @map("yarn_mill")                  // e.g. "Suedwolle"
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("colour_map")
+}
+
+// ─── YARN DELIVERIES ────────────────────────────────────
+
+enum DeliveryStatus {
+  PENDING       // PDF uploaded, awaiting physical delivery
+  CONFIRMED     // Physical delivery received
+  PARTIAL       // Only some items received
+  ISSUE         // Problem with delivery
+}
+
+model YarnDelivery {
+  id                Int            @id @default(autoincrement())
+  deliveryNoteRef   String         @unique @map("delivery_note_ref")  // e.g. "FI-26005186"
+  supplierId        Int?           @map("supplier_id")                // Manteco (destination supplier)
+  yarnMill          String?        @map("yarn_mill")                  // Suedwolle (sender)
+  status            DeliveryStatus @default(PENDING)
+  deliveryDate      DateTime?      @map("delivery_date")
+  confirmedDate     DateTime?      @map("confirmed_date")
+  confirmedBy       Int?           @map("confirmed_by")
+  totalCones        Int            @default(0) @map("total_cones")
+  totalNetKg        Float          @default(0) @map("total_net_kg")
+  totalGrossKg      Float          @default(0) @map("total_gross_kg")
+  notes             String?        @db.Text
+  rawPdfText        String?        @db.LongText @map("raw_pdf_text")  // Store parsed text for reference
+
+  supplier Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  lines    YarnDeliveryLine[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([supplierId])
+  @@map("yarn_deliveries")
+}
+
+model YarnDeliveryLine {
+  id              Int    @id @default(autoincrement())
+  deliveryId      Int    @map("delivery_id")
+  yarnType        String @map("yarn_type")                    // e.g. "NM 48/2*4 ETERNITY ZQ 6000"
+  colourCode      String @map("colour_code")                  // e.g. "8M1425"
+  colourName      String? @map("colour_name")                 // e.g. "GREY 45"
+  composition     String?                                     // e.g. "100% WV"
+  lotNumber       String? @map("lot_number")                  // Dye-Lot
+  prodLot         String? @map("prod_lot")                    // Prod-Lot
+  boxId           String? @map("box_id")
+  cones           Int     @default(0)
+  grossKg         Float   @default(0) @map("gross_kg")
+  netKg           Float   @default(0) @map("net_kg")
+  condKg          Float?  @map("cond_kg")                     // Conditioned weight
+  remainingKg     Float   @default(0) @map("remaining_kg")    // Tracks usage — starts at netKg
+
+  delivery YarnDelivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([deliveryId])
+  @@index([colourCode])
+  @@map("yarn_delivery_lines")
+}
+
+// ─── MATERIALS / SPINDLES ───────────────────────────────────
+
+model MaterialColor {
+  id            Int      @id @default(autoincrement())
+  name          String   @unique
+  colorCode     String?  @map("color_code")
+  hexValue      String?  @map("hex_value")
+  yarnType      String?  @map("yarn_type")
+  manufacturer  String?
+  stockWeightKg Float    @default(0) @map("stock_weight_kg")
+  remainingKg   Float    @default(0) @map("remaining_kg")
+  isActive      Boolean  @default(true) @map("is_active")
+  externalId    Int?     @unique @map("external_id")
+  lastSyncAt    DateTime? @map("last_sync_at")
+
+  orderLines OrderLine[]
+  garments   Garment[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("material_colors")
+}
+
+// ─── ORDERS ─────────────────────────────────────────────────
+
+enum OrderStatus {
+  DRAFT
+  CONFIRMED
+  ACKNOWLEDGED
+  IN_PRODUCTION
+  QC
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+model Order {
+  id            Int         @id @default(autoincrement())
+  orderRef      String      @unique @map("order_ref")
+  status        OrderStatus @default(DRAFT)
+  supplierId    Int?        @map("supplier_id")
+  manufacturer  String?
+  client        String?
+  dueDate       DateTime?   @map("due_date")
+  totalQuantity Int         @default(0) @map("total_quantity")
+  priority      Int         @default(0)
+  season        String?                                    // e.g. "AW26", "SS27" — admin-only tag
+  tags          String?                                    // comma-separated tags for admin filtering
+  notes         String?     @db.Text
+  externalId    Int?        @unique @map("external_id")
+  lastSyncAt    DateTime?   @map("last_sync_at")
+
+  supplier   Supplier?   @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  orderLines     OrderLine[]
+  productionRuns ProductionRun[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@map("orders")
+}
+
+// ─── ORDER LINES ────────────────────────────────────────────
+
+model OrderLine {
+  id         Int    @id @default(autoincrement())
+  orderId    Int    @map("order_id")
+  product    String
+  colorId    Int?   @map("color_id")
+  size       String?
+  style      String?
+  quantity   Int    @default(0)
+  unitPrice  Float? @map("unit_price")
+  notes      String? @db.Text
+  externalId Int?   @unique @map("external_id")
+
+  order          Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  color          MaterialColor? @relation(fields: [colorId], references: [id], onDelete: SetNull)
+  productionRuns ProductionRun[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([orderId])
+  @@map("order_lines")
+}
+
+// ─── PRODUCTION RUNS ────────────────────────────────────────
+
+enum RunStatus {
+  PLANNED
+  IN_PRODUCTION
+  QC
+  READY_TO_SHIP
+  SHIPPED
+  RECEIVED
+  COMPLETED
+}
+
+model ProductionRun {
+  id                 Int       @id @default(autoincrement())
+  runCode            String    @unique @map("run_code")
+  orderId            Int?      @map("order_id")              // Direct link to order (one run = one product across sizes)
+  orderLineId        Int?      @map("order_line_id")         // Legacy — single line link
+  supplierId         Int?      @map("supplier_id")
+  status             RunStatus @default(PLANNED)
+  quantity           Int       @default(0)                    // Total across all sizes
+  unitsProduced      Int       @default(0) @map("units_produced")
+  inputUnits         Int       @default(0) @map("input_units")
+
+  // Yarn delivery link
+  yarnDeliveryRef    String?   @map("yarn_delivery_ref")       // Delivery note reference
+  yarnColourCode     String?   @map("yarn_colour_code")        // Suedwolle colour code used
+  yarnLotNumber      String?   @map("yarn_lot_number")         // Specific lot from delivery
+
+  // SKU / product link
+  sku                String?                                  // product SKU reference
+  productName        String?   @map("product_name")           // pulled from SKU
+  productColor       String?   @map("product_color")
+  productSize        String?   @map("product_size")
+
+  // Tagging mode
+  individualTagging  Boolean   @default(false) @map("individual_tagging")  // true = scan each garment, false = bulk run
+  batchNfcTag        String?   @map("batch_nfc_tag")          // NFC for entire run (bulk mode)
+  batchQrCode        String?   @map("batch_qr_code")          // QR for entire run (bulk mode)
+
+  // Manufacturing config
+  washingProgram     String?   @map("washing_program")
+  washingTemperature Float?    @map("washing_temperature")
+  finishingProcess   String?   @map("finishing_process")
+  machineGauge       String?   @map("machine_gauge")
+  knitwearPly        String?   @map("knitwear_ply")
+
+  // Finisher info (set per run, not per garment)
+  finisherName       String?   @map("finisher_name")
+  finishedDate       DateTime? @map("finished_date")
+
+  startDate          DateTime? @map("start_date")
+  expectedCompletion DateTime? @map("expected_completion")
+  actualCompletion   DateTime? @map("actual_completion")
+  notes              String?   @db.Text
+
+  externalId Int?      @unique @map("external_id")
+  lastSyncAt DateTime? @map("last_sync_at")
+
+  order            Order?            @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  orderLine        OrderLine?        @relation(fields: [orderLineId], references: [id], onDelete: SetNull)
+  supplier         Supplier?         @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  sizeBreakdown    RunSizeBreakdown[]
+  yarnCompositions YarnComposition[]
+  garments         Garment[]
+  impactRecords    SupplierImpact[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([orderId])
+  @@index([orderLineId])
+  @@index([status])
+  @@map("production_runs")
+}
+
+// ─── RUN SIZE BREAKDOWN ─────────────────────────────────
+
+model RunSizeBreakdown {
+  id              Int    @id @default(autoincrement())
+  productionRunId Int    @map("production_run_id")
+  orderLineId     Int?   @map("order_line_id")          // Links back to the specific order line for this size
+  size            String                                 // e.g. "0 - Extra Small", "2 - Medium"
+  sku             String?                                // Size-specific SKU e.g. "LSPL-PRP-FAWN-2"
+  quantity        Int    @default(0)                     // Ordered quantity for this size
+  produced        Int    @default(0)                     // How many produced/scanned for this size
+
+  productionRun ProductionRun @relation(fields: [productionRunId], references: [id], onDelete: Cascade)
+
+  @@index([productionRunId])
+  @@map("run_size_breakdown")
+}
+
+// ─── YARN COMPOSITION ───────────────────────────────────────
+
+model YarnComposition {
+  id              Int    @id @default(autoincrement())
+  productionRunId Int    @map("production_run_id")
+  yarnType        String @map("yarn_type")
+  percentage      Float
+  colorRef        String? @map("color_ref")
+  yarnOrderCode   String? @map("yarn_order_code")       // e.g. "2/48-EGREEN-6M1685-6108892-GL"
+  lotNumber       String? @map("lot_number")             // Suedwolle delivery note lot number
+  supplierRef     String? @map("supplier_ref")           // Yarn supplier reference
+
+  productionRun ProductionRun @relation(fields: [productionRunId], references: [id], onDelete: Cascade)
+
+  @@index([productionRunId])
+  @@map("yarn_compositions")
+}
+
+// ─── GARMENTS / SWEATERS ────────────────────────────────────
+
+model Garment {
+  id              Int       @id @default(autoincrement())
+  garmentCode     String    @unique @map("garment_code")
+  productionRunId Int?      @map("production_run_id")
+  colorId         Int?      @map("color_id")
+  size            String?
+  style           String?
+  product         String?
+
+  // NFC + QR
+  nfcTagId        String?   @unique @map("nfc_tag_id")
+  qrCode          String?   @unique @map("qr_code")
+  traceabilityUrl String?   @map("traceability_url")
+
+  // GPS / location
+  lastLatitude      Float?    @map("last_latitude")
+  lastLongitude     Float?    @map("last_longitude")
+  lastLocationName  String?   @map("last_location_name")
+  locationUpdatedAt DateTime? @map("location_updated_at")
+
+  // Tagging status
+  isTagged  Boolean   @default(false) @map("is_tagged")
+  taggedAt  DateTime? @map("tagged_at")
+
+  // Manufacturer / finisher
+  manufacturer String?
+  finisher     String?
+
+  externalId Int?      @unique @map("external_id")
+  lastSyncAt DateTime? @map("last_sync_at")
+
+  productionRun ProductionRun?  @relation(fields: [productionRunId], references: [id], onDelete: SetNull)
+  color         MaterialColor?  @relation(fields: [colorId], references: [id], onDelete: SetNull)
+  qrHistory     QrChangeLog[]
+  scanEvents    ScanEvent[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([productionRunId])
+  @@index([colorId])
+  @@index([isTagged])
+  @@map("garments")
+}
+
+// ─── QR CHANGE LOG ──────────────────────────────────────────
+
+model QrChangeLog {
+  id        Int      @id @default(autoincrement())
+  garmentId Int      @map("garment_id")
+  oldQrCode String?  @map("old_qr_code")
+  newQrCode String   @map("new_qr_code")
+  reason    String?  @db.Text
+  changedBy Int?     @map("changed_by")
+
+  garment Garment @relation(fields: [garmentId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([garmentId])
+  @@map("qr_change_log")
+}
+
+// ─── SCAN EVENTS ────────────────────────────────────────────
+
+enum ScanType {
+  NFC_READ
+  NFC_WRITE
+  QR_SCAN
+  QR_GENERATE
+}
+
+model ScanEvent {
+  id         Int       @id @default(autoincrement())
+  garmentId  Int?      @map("garment_id")
+  scanType   ScanType  @map("scan_type")
+  tagData    String?   @db.Text @map("tag_data")
+  latitude   Float?
+  longitude  Float?
+  userId     Int?      @map("user_id")
+  deviceInfo String?   @db.VarChar(500) @map("device_info")
+
+  garment Garment? @relation(fields: [garmentId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([garmentId])
+  @@index([scanType, createdAt])
+  @@map("scan_events")
+}
+
+// ─── SHOPIFY SYNC ───────────────────────────────────────────
+
+model ShopifyProduct {
+  id           Int      @id @default(autoincrement())
+  shopifyId    String   @unique @map("shopify_id")
+  title        String
+  variantId    String?  @map("variant_id")
+  sku          String?
+  inventoryQty Int      @default(0) @map("inventory_qty")
+  lastSyncAt   DateTime @default(now()) @map("last_sync_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([sku])
+  @@map("shopify_products")
+}
+
+// ─── SYNC LOG ───────────────────────────────────────────────
+
+enum SyncDirection {
+  PULL
+  PUSH
+}
+
+model SyncLog {
+  id          Int           @id @default(autoincrement())
+  entityType  String        @map("entity_type")
+  direction   SyncDirection
+  recordCount Int           @default(0) @map("record_count")
+  status      String        @default("success")
+  errorMsg    String?       @db.Text @map("error_msg")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([entityType, createdAt])
+  @@map("sync_log")
+}
+
+// ─── APP SETTINGS ───────────────────────────────────────────
+
+model AppSetting {
+  key       String   @id
+  value     String   @db.Text
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("app_settings")
+}
+
+// ─── EDIT LOG (tracks changes to orders/runs) ───────────
+
+model EditLog {
+  id          Int      @id @default(autoincrement())
+  entityType  String   @map("entity_type")              // "order", "order_line", "production_run"
+  entityId    Int      @map("entity_id")                 // ID of the order/line/run
+  field       String                                     // Field that was changed
+  oldValue    String?  @db.Text @map("old_value")
+  newValue    String?  @db.Text @map("new_value")
+  note        String?  @db.Text                          // Reason for the change
+  changedBy   String?  @map("changed_by")                // User name/email
+  role        String?                                    // "ADMIN" or "SUPPLIER"
+
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([entityType, entityId])
+  @@map("edit_log")
+}

@@ -1,0 +1,20 @@
+services:
+  db:
+    image: mysql:8.0
+    container_name: sheep-supply-chain-db
+    restart: unless-stopped
+    ports:
+      - "3391:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: supplychain
+      MYSQL_DATABASE: supply_chain
+    volumes:
+      - supply_chain_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-psupplychain"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  supply_chain_data:

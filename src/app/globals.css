@@ -1,0 +1,153 @@
+@import "tailwindcss";
+
+/* ─── Design Tokens (Tailwind v4 @theme) ─── */
+@theme {
+  /* Core semantic colours */
+  --color-background: hsl(210 40% 98%);
+  --color-foreground: hsl(222 47% 11%);
+
+  --color-card: hsl(0 0% 100%);
+  --color-card-foreground: hsl(222 47% 11%);
+
+  --color-primary: hsl(217 91% 60%);
+  --color-primary-foreground: hsl(0 0% 100%);
+
+  --color-secondary: hsl(210 40% 96%);
+  --color-secondary-foreground: hsl(222 47% 11%);
+
+  --color-muted: hsl(210 40% 96%);
+  --color-muted-foreground: hsl(215 16% 47%);
+
+  --color-accent: hsl(174 72% 46%);
+  --color-accent-foreground: hsl(222 47% 11%);
+
+  --color-destructive: hsl(0 84% 60%);
+  --color-destructive-foreground: hsl(0 0% 100%);
+
+  --color-border: hsl(214 32% 91%);
+  --color-input: hsl(214 32% 91%);
+  --color-ring: hsl(217 91% 60%);
+
+  /* Brand */
+  --color-brand: hsl(217 91% 60%);
+  --color-brand-hover: hsl(217 91% 53%);
+  --color-brand-glow: hsl(217 91% 60%);
+
+  /* Surfaces */
+  --color-surface-room: hsl(210 40% 98%);
+  --color-surface-work: hsl(0 0% 100%);
+
+  /* Text hierarchy */
+  --color-text-primary: hsl(222 47% 11%);
+  --color-text-secondary: hsl(215 16% 47%);
+  --color-text-tertiary: hsl(215 20% 65%);
+
+  /* Accent teal */
+  --color-accent-teal: hsl(174 72% 46%);
+  --color-accent-teal-foreground: hsl(222 47% 11%);
+
+  /* Badge tokens */
+  --color-badge-green-bg: hsl(142 76% 96%);
+  --color-badge-green-text: hsl(142 72% 29%);
+  --color-badge-blue-bg: hsl(214 95% 96%);
+  --color-badge-blue-text: hsl(217 91% 45%);
+  --color-badge-orange-bg: hsl(33 100% 96%);
+  --color-badge-orange-text: hsl(21 90% 38%);
+  --color-badge-red-bg: hsl(0 86% 97%);
+  --color-badge-red-text: hsl(0 72% 41%);
+  --color-badge-purple-bg: hsl(270 100% 98%);
+  --color-badge-purple-text: hsl(271 76% 36%);
+  --color-badge-emerald-bg: hsl(152 81% 96%);
+  --color-badge-emerald-text: hsl(160 84% 27%);
+  --color-badge-pink-bg: hsl(327 73% 97%);
+  --color-badge-pink-text: hsl(336 80% 38%);
+  --color-badge-sky-bg: hsl(201 94% 96%);
+  --color-badge-sky-text: hsl(201 90% 35%);
+  --color-badge-gray-bg: hsl(220 14% 96%);
+  --color-badge-gray-text: hsl(220 9% 46%);
+
+  /* Sidebar */
+  --color-sidebar-background: hsl(0 0% 100%);
+  --color-sidebar-foreground: hsl(220 9% 46%);
+  --color-sidebar-primary: hsl(217 91% 60%);
+  --color-sidebar-primary-foreground: hsl(0 0% 100%);
+  --color-sidebar-accent: hsl(214 95% 96%);
+  --color-sidebar-accent-foreground: hsl(217 91% 45%);
+  --color-sidebar-border: hsl(214 32% 91%);
+
+  /* Module section colours */
+  --color-section-overview: hsl(21 90% 48%);
+  --color-section-materials: hsl(271 76% 53%);
+  --color-section-orders: hsl(217 91% 60%);
+  --color-section-production: hsl(25 95% 53%);
+  --color-section-garments: hsl(142 76% 36%);
+  --color-section-shopify: hsl(152 69% 40%);
+
+  /* Radius */
+  --radius: 0.5rem;
+}
+
+/* ─── Base Styles ─── */
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    letter-spacing: -0.02em;
+  }
+}
+
+/* ─── Utility Classes ─── */
+@utility tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+@utility font-mono-brand {
+  font-family: var(--font-space-mono), 'Space Mono', monospace;
+}
+
+@utility wireframe-grid {
+  background-image:
+    linear-gradient(hsl(214 32% 91% / 0.6) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(214 32% 91% / 0.6) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+@utility perspective-grid {
+  background-image:
+    linear-gradient(hsl(217 91% 60% / 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(217 91% 60% / 0.04) 1px, transparent 1px);
+  background-size: 60px 60px;
+}
+
+@utility glow-brand {
+  box-shadow: 0 0 20px hsl(217 91% 60% / 0.12), 0 0 60px hsl(217 91% 60% / 0.04);
+}
+
+@utility glow-teal {
+  box-shadow: 0 0 20px hsl(174 72% 46% / 0.12), 0 0 60px hsl(174 72% 46% / 0.04);
+}
+
+/* Hub circle subtle pulse */
+@keyframes subtle-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.08); opacity: 0.8; }
+}
+
+@utility animate-subtle-pulse {
+  animation: subtle-pulse 3s ease-in-out infinite;
+}
+
+/* Hide scrollbar but keep scroll */
+@utility scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}

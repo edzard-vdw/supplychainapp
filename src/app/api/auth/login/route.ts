@@ -35,6 +35,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (!user.isActive) {
+      return NextResponse.json(
+        { success: false, error: "This account has been deactivated. Please contact your administrator." },
+        { status: 403 }
+      );
+    }
+
     const session = await getSession();
     session.userId = user.id;
     session.email = user.email;

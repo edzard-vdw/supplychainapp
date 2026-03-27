@@ -98,9 +98,9 @@ export const ADMIN_SECTIONS: HubSection[] = [
 export const SUPPLIER_SECTIONS: HubSection[] = [
   {
     id: "production",
-    label: "PRODUCTION.",
+    label: "PRODUCTION",
     icon: Factory,
-    description: "Orders & production runs",
+    description: "Your orders and production runs",
     color: "hsl(271 76% 53%)",
     glowColor: "hsl(271 76% 53% / 0.25)",
     routePrefix: "/production-runs",
@@ -111,9 +111,9 @@ export const SUPPLIER_SECTIONS: HubSection[] = [
   },
   {
     id: "materials",
-    label: "MATERIALS.",
+    label: "MATERIALS",
     icon: Palette,
-    description: "Yarn deliveries & stock",
+    description: "Yarn stock and deliveries",
     color: "hsl(21 90% 48%)",
     glowColor: "hsl(21 90% 48% / 0.25)",
     routePrefix: "/materials",
@@ -121,9 +121,9 @@ export const SUPPLIER_SECTIONS: HubSection[] = [
   },
   {
     id: "new-run",
-    label: "NEW RUN.",
+    label: "NEW RUN",
     icon: Zap,
-    description: "Start a production run",
+    description: "Start a new production run",
     color: "hsl(217 91% 60%)",
     glowColor: "hsl(217 91% 60% / 0.25)",
     routePrefix: "/production-runs?create=true",
@@ -131,9 +131,9 @@ export const SUPPLIER_SECTIONS: HubSection[] = [
   },
   {
     id: "garments",
-    label: "GARMENTS.",
+    label: "GARMENTS",
     icon: Shirt,
-    description: "Tag, scan & check garments",
+    description: "Scan and check garments",
     color: "hsl(142 76% 36%)",
     glowColor: "hsl(142 76% 36% / 0.25)",
     routePrefix: "/garments",
@@ -144,14 +144,14 @@ export const SUPPLIER_SECTIONS: HubSection[] = [
   },
   {
     id: "impact",
-    label: "IMPACT.",
+    label: "IMPACT",
     icon: Leaf,
-    description: "Your facility impact data",
+    description: "Your factory's environmental data",
     color: "hsl(174 72% 46%)",
     glowColor: "hsl(174 72% 46% / 0.25)",
     routePrefix: "/impact",
     tabs: [
-      { name: "My Data", slug: "my-data" },
+      { name: "My Factory", slug: "my-data" },
     ],
   },
 ];

@@ -217,9 +217,9 @@ export function HubView({ user, stats }: HubViewProps) {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-[12px] font-semibold text-foreground">
-                  {stats.pendingOrders === 1 ? "New order requires acknowledgment" : `${stats.pendingOrders} new orders require acknowledgment`}
+                  {stats.pendingOrders === 1 ? "New order needs your attention" : `${stats.pendingOrders} new orders need your attention`}
                 </p>
-                <p className="text-[10px] text-badge-blue-text">Tap to review and acknowledge →</p>
+                <p className="text-[10px] text-badge-blue-text">Tap to review and accept →</p>
               </div>
             </Link>
           )}

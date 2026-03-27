@@ -30,12 +30,14 @@ export default function RunScanPage() {
   const [nfcSupported, setNfcSupported] = useState(false);
   const [manualInput, setManualInput] = useState("");
   const [scanHistory, setScanHistory] = useState<ScanEntry[]>([]);
+  const [runCode, setRunCode] = useState("");
 
   // Load run sizes on mount
   useEffect(() => {
     fetch(`/api/auth/me`).then(() => {
       import("@/lib/actions/production-runs").then(({ getProductionRun }) => {
         getProductionRun(runId).then((run) => {
+          if (run?.runCode) setRunCode(run.runCode);
           if (run?.sizeBreakdown && run.sizeBreakdown.length > 0) {
             setSizes(run.sizeBreakdown.map((sb) => ({ id: sb.id, size: sb.size, quantity: sb.quantity, produced: sb.produced })));
             // Auto-select first size with remaining capacity
@@ -174,12 +176,12 @@ export default function RunScanPage() {
     <div className="h-full flex flex-col overflow-hidden">
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-3 border-b border-border bg-card shrink-0">
-        <Link href="/production-runs" className="p-1 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground">
+        <Link href={`/production-runs/${runId}`} className="p-1 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground">
           <ArrowLeft size={18} />
         </Link>
         <div className="flex-1 min-w-0">
-          <p className="text-[10px] font-mono-brand uppercase tracking-widest text-muted-foreground">Dual Scan — QR + NFC</p>
-          <p className="text-[12px] font-bold text-foreground">Production Run</p>
+          <p className="text-[10px] font-mono-brand uppercase tracking-widest text-muted-foreground">Scan Garment — Step {scanStep === "qr" ? "1" : "2"} of 2</p>
+          <p className="text-[12px] font-bold text-foreground">{runCode || `Run #${runId}`}</p>
         </div>
         <div className="flex items-center gap-1">
           <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold ${scanStep === "qr" ? "bg-foreground text-background" : capturedQR ? "bg-badge-green-text text-white" : "bg-muted text-muted-foreground"}`}>

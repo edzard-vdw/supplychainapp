@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Upload, Package, CheckCircle, AlertTriangle, ChevronDown, ChevronUp, Pencil } from "lucide-react";
+import { ContextualHelp } from "@/components/ui/contextual-help";
 import { Badge } from "@/components/ui/badge";
 import { importDeliveryNote, confirmDelivery, updateYarnDeliveryLine, type ParsedDeliveryNote } from "@/lib/actions/yarn-deliveries";
 
@@ -331,6 +332,17 @@ export function MaterialsPageClient({
           </div>
         </div>
       )}
+      <ContextualHelp
+        pageId="materials"
+        title="Yarn & Materials"
+        steps={[
+          { icon: "📄", text: "When yarn arrives, upload the delivery note PDF" },
+          { icon: "✅", text: "Review the parsed data, then confirm the delivery" },
+          { icon: "🧶", text: "Your yarn stock updates automatically by colour and lot" },
+          { icon: "🔗", text: "When creating production runs, link them to a yarn lot" },
+        ]}
+        tip="Tap a colour row to see individual lots with remaining stock."
+      />
     </div>
   );
 }

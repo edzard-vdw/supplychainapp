@@ -3,9 +3,9 @@
 export const ORDER_STATUS_DISPLAY: Record<string, { label: string; bgClass: string; textClass: string }> = {
   DRAFT: { label: "Draft", bgClass: "bg-badge-gray-bg", textClass: "text-badge-gray-text" },
   CONFIRMED: { label: "Submitted", bgClass: "bg-badge-blue-bg", textClass: "text-badge-blue-text" },
-  ACKNOWLEDGED: { label: "Acknowledged", bgClass: "bg-badge-emerald-bg", textClass: "text-badge-emerald-text" },
+  ACKNOWLEDGED: { label: "Accepted", bgClass: "bg-badge-emerald-bg", textClass: "text-badge-emerald-text" },
   IN_PRODUCTION: { label: "In Production", bgClass: "bg-badge-orange-bg", textClass: "text-badge-orange-text" },
-  QC: { label: "QC", bgClass: "bg-badge-purple-bg", textClass: "text-badge-purple-text" },
+  QC: { label: "Quality Check", bgClass: "bg-badge-purple-bg", textClass: "text-badge-purple-text" },
   SHIPPED: { label: "Shipped", bgClass: "bg-badge-sky-bg", textClass: "text-badge-sky-text" },
   DELIVERED: { label: "Delivered", bgClass: "bg-badge-green-bg", textClass: "text-badge-green-text" },
   CANCELLED: { label: "Cancelled", bgClass: "bg-badge-red-bg", textClass: "text-badge-red-text" },
@@ -49,7 +49,7 @@ export function isOrderAdminOnly(status: string): boolean {
 export const RUN_STATUS_DISPLAY: Record<string, { label: string; bgClass: string; textClass: string }> = {
   PLANNED: { label: "Planned", bgClass: "bg-badge-gray-bg", textClass: "text-badge-gray-text" },
   IN_PRODUCTION: { label: "In Production", bgClass: "bg-badge-orange-bg", textClass: "text-badge-orange-text" },
-  QC: { label: "QC", bgClass: "bg-badge-purple-bg", textClass: "text-badge-purple-text" },
+  QC: { label: "Quality Check", bgClass: "bg-badge-purple-bg", textClass: "text-badge-purple-text" },
   READY_TO_SHIP: { label: "Ready to Ship", bgClass: "bg-badge-emerald-bg", textClass: "text-badge-emerald-text" },
   SHIPPED: { label: "Shipped", bgClass: "bg-badge-sky-bg", textClass: "text-badge-sky-text" },
   RECEIVED: { label: "Received", bgClass: "bg-badge-blue-bg", textClass: "text-badge-blue-text" },

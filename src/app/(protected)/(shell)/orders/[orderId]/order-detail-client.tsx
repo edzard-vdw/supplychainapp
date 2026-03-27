@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { ContextualHelp } from "@/components/ui/contextual-help";
 import { ArrowLeft, Plus, ChevronDown, ChevronUp, Trash2, Upload, FileSpreadsheet, Pencil, History, CheckCircle } from "lucide-react";
 import { StatusBadge, Badge } from "@/components/ui/badge";
 import { ORDER_STATUS_DISPLAY, formatDate } from "@/types/supply-chain";
@@ -56,6 +57,7 @@ export function OrderDetailClient({ order, materials, suppliers, editHistory, us
   const [newQty, setNewQty] = useState(0);
   const [showPOUpload, setShowPOUpload] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [revertConfirm, setRevertConfirm] = useState<string | null>(null);
 
   // Edit with note state
   const [editingLineId, setEditingLineId] = useState<number | null>(null);
@@ -113,6 +115,14 @@ export function OrderDetailClient({ order, materials, suppliers, editHistory, us
   function handleStatusChange(status: string) {
     startTransition(async () => {
       await updateOrder(order.id, { status });
+      router.refresh();
+    });
+  }
+
+  function handleRevert(toStatus: string) {
+    setRevertConfirm(null);
+    startTransition(async () => {
+      await updateOrder(order.id, { status: toStatus });
       router.refresh();
     });
   }
@@ -224,11 +234,31 @@ export function OrderDetailClient({ order, materials, suppliers, editHistory, us
         )}
 
         {isAdmin && isConfirmed && (
-          <div className="flex items-center gap-3 p-4 rounded-xl bg-badge-emerald-bg/50 border border-badge-emerald-text/20">
-            <div className="flex-1">
-              <p className="text-[12px] font-semibold text-foreground">Submitted to supplier — awaiting acknowledgment</p>
-              <p className="text-[10px] text-muted-foreground">The supplier needs to acknowledge receipt of this order before they start production.</p>
+          <div className="space-y-2">
+            <div className="flex items-center gap-3 p-4 rounded-xl bg-badge-emerald-bg/50 border border-badge-emerald-text/20">
+              <div className="flex-1">
+                <p className="text-[12px] font-semibold text-foreground">Submitted to supplier — awaiting acknowledgment</p>
+                <p className="text-[10px] text-muted-foreground">The supplier needs to accept this order before they can start production.</p>
+              </div>
+              <button
+                onClick={() => setRevertConfirm("DRAFT")}
+                disabled={isPending}
+                className="px-3 py-1.5 rounded-lg border border-border text-[10px] font-bold uppercase tracking-wider text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors shrink-0"
+              >
+                ← Recall
+              </button>
             </div>
+            {revertConfirm === "DRAFT" && (
+              <div className="flex items-center gap-3 p-3 rounded-xl bg-badge-orange-bg/50 border border-badge-orange-text/30">
+                <p className="text-[11px] text-foreground flex-1">Recall this order back to <span className="font-bold">Draft</span>? The supplier will no longer see it.</p>
+                <button onClick={() => handleRevert("DRAFT")} disabled={isPending} className="px-3 py-1.5 rounded-lg bg-badge-orange-text text-white text-[10px] font-bold uppercase tracking-wider shrink-0">
+                  {isPending ? "..." : "Confirm"}
+                </button>
+                <button onClick={() => setRevertConfirm(null)} className="text-[10px] text-muted-foreground hover:text-foreground transition-colors">
+                  Cancel
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -236,34 +266,94 @@ export function OrderDetailClient({ order, materials, suppliers, editHistory, us
           <div className="flex items-center gap-3 p-4 rounded-xl bg-badge-blue-bg/50 border border-badge-blue-text/20">
             <div className="flex-1">
               <p className="text-[12px] font-semibold text-foreground">New order received</p>
-              <p className="text-[10px] text-muted-foreground">Please review the order details and acknowledge receipt to confirm you can fulfil this order.</p>
+              <p className="text-[10px] text-muted-foreground">Please review the order details below and confirm you can fulfil this order.</p>
             </div>
             <button
               onClick={() => handleStatusChange("ACKNOWLEDGED")}
               disabled={isPending}
               className="px-5 py-2.5 rounded-lg bg-foreground text-background text-[11px] font-bold uppercase tracking-wider disabled:opacity-40 shrink-0"
             >
-              {isPending ? "..." : "Acknowledge Order"}
+              {isPending ? "..." : "Accept Order"}
             </button>
           </div>
         )}
 
-        {!isAdmin && isInSupplierHands && order.status !== "SHIPPED" && (
-          <div className="flex items-center gap-3 p-4 rounded-xl bg-secondary/50 border border-border">
-            <div className="flex-1">
-              <p className="text-[12px] font-semibold text-foreground">In your hands — update status as you progress</p>
+        {!isAdmin && isInSupplierHands && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-3 p-4 rounded-xl bg-secondary/50 border border-border">
+              <div className="flex-1">
+                <p className="text-[12px] font-semibold text-foreground">
+                  {order.status === "SHIPPED" ? "Marked as shipped — awaiting admin confirmation" : "In your hands — update status as you progress"}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                {/* ── Backward buttons ── */}
+                {order.status === "IN_PRODUCTION" && (
+                  <button
+                    onClick={() => setRevertConfirm("ACKNOWLEDGED")}
+                    disabled={isPending}
+                    className="px-3 py-1.5 rounded-lg border border-border text-[10px] font-bold uppercase tracking-wider text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors"
+                  >
+                    ← Undo
+                  </button>
+                )}
+                {order.status === "QC" && (
+                  <button
+                    onClick={() => setRevertConfirm("IN_PRODUCTION")}
+                    disabled={isPending}
+                    className="px-3 py-1.5 rounded-lg border border-border text-[10px] font-bold uppercase tracking-wider text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors"
+                  >
+                    ← Production
+                  </button>
+                )}
+                {order.status === "SHIPPED" && (
+                  <button
+                    onClick={() => setRevertConfirm("QC")}
+                    disabled={isPending}
+                    className="px-3 py-1.5 rounded-lg border border-border text-[10px] font-bold uppercase tracking-wider text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors"
+                  >
+                    ← Back to QC
+                  </button>
+                )}
+                {/* ── Forward buttons ── */}
+                {order.status === "ACKNOWLEDGED" && (
+                  <button onClick={() => handleStatusChange("IN_PRODUCTION")} disabled={isPending} className="px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider text-white" style={{ backgroundColor: "hsl(25 95% 53%)" }}>
+                    {isPending ? "..." : "Start Production"}
+                  </button>
+                )}
+                {order.status === "IN_PRODUCTION" && (
+                  <button onClick={() => handleStatusChange("QC")} disabled={isPending} className="px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider text-white" style={{ backgroundColor: "hsl(271 76% 53%)" }}>
+                    {isPending ? "..." : "Move to QC"}
+                  </button>
+                )}
+                {order.status === "QC" && (
+                  <button onClick={() => handleStatusChange("SHIPPED")} disabled={isPending} className="px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider text-white" style={{ backgroundColor: "hsl(200 80% 50%)" }}>
+                    {isPending ? "..." : "Mark Shipped"}
+                  </button>
+                )}
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              {order.status === "ACKNOWLEDGED" && (
-                <button onClick={() => handleStatusChange("IN_PRODUCTION")} disabled={isPending} className="px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider text-white" style={{ backgroundColor: "hsl(25 95% 53%)" }}>Start Production</button>
-              )}
-              {order.status === "IN_PRODUCTION" && (
-                <button onClick={() => handleStatusChange("QC")} disabled={isPending} className="px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider text-white" style={{ backgroundColor: "hsl(271 76% 53%)" }}>Move to QC</button>
-              )}
-              {order.status === "QC" && (
-                <button onClick={() => handleStatusChange("SHIPPED")} disabled={isPending} className="px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider text-white" style={{ backgroundColor: "hsl(200 80% 50%)" }}>Mark Shipped</button>
-              )}
-            </div>
+            {/* ── Inline revert confirmation ── */}
+            {revertConfirm && revertConfirm !== "DRAFT" && (
+              <div className="flex items-center gap-3 p-3 rounded-xl bg-badge-orange-bg/50 border border-badge-orange-text/30">
+                <p className="text-[11px] text-foreground flex-1">
+                  Move back to <span className="font-bold">{ORDER_STATUS_DISPLAY[revertConfirm]?.label || revertConfirm}</span>?
+                  {revertConfirm === "IN_PRODUCTION" && " Use this if quality checks need a rework."}
+                  {revertConfirm === "ACKNOWLEDGED" && " Use this if production hasn't actually started."}
+                  {revertConfirm === "QC" && " Use this if the shipment was marked by mistake."}
+                </p>
+                <button
+                  onClick={() => handleRevert(revertConfirm)}
+                  disabled={isPending}
+                  className="px-3 py-1.5 rounded-lg bg-badge-orange-text text-white text-[10px] font-bold uppercase tracking-wider shrink-0"
+                >
+                  {isPending ? "..." : "Confirm"}
+                </button>
+                <button onClick={() => setRevertConfirm(null)} className="text-[10px] text-muted-foreground hover:text-foreground transition-colors">
+                  Cancel
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -638,6 +728,19 @@ export function OrderDetailClient({ order, materials, suppliers, editHistory, us
             </div>
           )}
         </div>
+      )}
+      {!isAdmin && (
+        <ContextualHelp
+          pageId="order-detail"
+          title="Order Details"
+          steps={[
+            { icon: "👀", text: "Review the order — check products, sizes and quantities" },
+            { icon: "✅", text: "If everything looks correct, tap 'Accept Order' at the top" },
+            { icon: "🏭", text: "Once accepted, go to Production to start making the items" },
+            { icon: "📦", text: "Update the order status as you progress through production" },
+          ]}
+          tip="If a quantity is wrong, tap the pencil icon to request a change with a note."
+        />
       )}
     </div>
   );

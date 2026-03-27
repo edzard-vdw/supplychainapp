@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Space_Grotesk, Space_Mono } from "next/font/google";
 import "./globals.css";
 import { DevRoleToggle } from "@/components/dev-role-toggle";
+import { ToastProvider } from "@/components/ui/toast";
 
 const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
@@ -31,8 +32,10 @@ export default function RootLayout({
         className={`${spaceGrotesk.variable} ${spaceMono.variable} antialiased`}
         style={{ fontFamily: "var(--font-space-grotesk), system-ui, sans-serif" }}
       >
-        {children}
-        <DevRoleToggle />
+        <ToastProvider>
+          {children}
+          <DevRoleToggle />
+        </ToastProvider>
       </body>
     </html>
   );

@@ -151,3 +151,13 @@
     display: none;
   }
 }
+
+/* Contextual help pulse ring */
+@keyframes help-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 hsl(217 91% 60% / 0.4); }
+  50% { box-shadow: 0 0 0 8px hsl(217 91% 60% / 0); }
+}
+
+@utility animate-help-pulse {
+  animation: help-pulse 2s ease-in-out infinite;
+}

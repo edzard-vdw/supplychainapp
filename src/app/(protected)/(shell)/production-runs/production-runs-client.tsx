@@ -3,10 +3,12 @@
 import { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Plus, Search, ChevronDown, ChevronUp, Factory, Building2, List, Columns3, GripVertical } from "lucide-react";
+import { Plus, Search, ChevronDown, ChevronUp, Factory, Building2, List, Columns3, GripVertical, ChevronRight } from "lucide-react";
 import { StatusBadge, Badge } from "@/components/ui/badge";
 import { RUN_STATUS_DISPLAY, RUN_STATUS_ORDER, getRunStatusOrder, formatDate } from "@/types/supply-chain";
 import { createProductionRun, updateProductionRun } from "@/lib/actions/production-runs";
+import { useToast } from "@/components/ui/toast";
+import { ContextualHelp } from "@/components/ui/contextual-help";
 
 type RunWithRelations = {
   id: number;
@@ -70,16 +72,24 @@ export function ProductionRunsClient({
   prefill?: { product: string; sku: string; size: string; qty: number; orderLineId: number };
 }) {
   const router = useRouter();
+  const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
   const [search, setSearch] = useState("");
   const statusOrder = getRunStatusOrder(isAdmin ? "ADMIN" : "SUPPLIER");
   const [visibleColumns, setVisibleColumns] = useState<Set<string>>(new Set(statusOrder));
-  const [viewMode, setViewMode] = useState<"list" | "pipeline">("pipeline");
+  const [viewMode, setViewMode] = useState<"list" | "pipeline">(isAdmin ? "pipeline" : "list");
   const [showCreate, setShowCreate] = useState(false);
   const [batchLines, setBatchLines] = useState<OrderLineDetail[]>([]); // Lines to batch-create runs for
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [expandedOrderId, setExpandedOrderId] = useState<number | null>(null);
   const [dragRunId, setDragRunId] = useState<number | null>(null);
+
+  // Inline form state — which order card has the form open inside it
+  const [inlineFormOrderId, setInlineFormOrderId] = useState<number | null>(null);
+  const [inlineFormStep, setInlineFormStep] = useState<"sizes" | "details">("sizes");
+  const [inlineSelectedLines, setInlineSelectedLines] = useState<OrderLineDetail[]>([]);
+  // For standalone form: selected PO from dropdown
+  const [standaloneOrderId, setStandaloneOrderId] = useState<number | null>(null);
 
   // Create form
   // Pre-fill from PO link if available
@@ -93,7 +103,7 @@ export function ProductionRunsClient({
   const [newYarnLotId, setNewYarnLotId] = useState<number | null>(null);
   const [newYarnColourCode, setNewYarnColourCode] = useState("");
   const [newYarnLotNumber, setNewYarnLotNumber] = useState("");
-  const [newIndividualTagging, setNewIndividualTagging] = useState(false);
+  const [newIndividualTagging, setNewIndividualTagging] = useState(true);
   const [newWashing, setNewWashing] = useState("");
   const [newTemp, setNewTemp] = useState("");
   const [newFinishing, setNewFinishing] = useState("");
@@ -128,6 +138,113 @@ export function ProductionRunsClient({
   useEffect(() => {
     if (showCreateOnLoad) setShowCreate(true);
   }, [showCreateOnLoad]);
+
+  // Reset inline form state
+  function resetFormFields() {
+    setNewCode("AUTO"); setNewQty(0); setNewSku(""); setNewProductName(""); setNewProductColor("");
+    setNewYarnLotId(null); setNewYarnColourCode(""); setNewYarnLotNumber("");
+    setNewIndividualTagging(true); setNewWashing(""); setNewTemp("");
+    setNewFinishing(""); setNewFinisherName(""); setNewGauge(""); setNewPly("");
+  }
+
+  // Open inline form inside a PO card
+  function openInlineForm(orderId: number, lines: OrderLineDetail[], mode: "all" | "single", singleLine?: OrderLineDetail) {
+    // Close any existing inline form / standalone form
+    setShowCreate(false);
+    setBatchLines([]);
+    resetFormFields();
+
+    setExpandedOrderId(orderId);
+    setInlineFormOrderId(orderId);
+    setInlineFormStep(mode === "all" ? "details" : "details");
+
+    if (mode === "all") {
+      setInlineSelectedLines(lines);
+      setNewProductName(lines[0]?.product || "");
+    } else if (singleLine) {
+      setInlineSelectedLines([singleLine]);
+      setNewProductName(singleLine.product);
+      setNewSku(singleLine.style || "");
+      setNewQty(singleLine.quantity);
+    }
+  }
+
+  // Close inline form
+  function closeInlineForm() {
+    setInlineFormOrderId(null);
+    setInlineFormStep("sizes");
+    setInlineSelectedLines([]);
+    resetFormFields();
+  }
+
+  // Handle creating from inline form
+  async function handleInlineCreate() {
+    startTransition(async () => {
+      const config = getSharedConfig();
+      let result;
+
+      if (inlineSelectedLines.length > 1) {
+        // Batch mode — one run with size breakdown
+        const sizes = inlineSelectedLines.map((line) => ({
+          size: line.size || "One Size",
+          sku: line.style || undefined,
+          quantity: line.quantity,
+          orderLineId: line.id,
+        }));
+        result = await createProductionRun(
+          {
+            runCode: "AUTO",
+            orderId: null,
+            orderLineId: inlineSelectedLines[0]?.id || null,
+            productName: inlineSelectedLines[0]?.product || newProductName || null,
+            productColor: newProductColor || null,
+            ...config,
+          },
+          undefined,
+          sizes,
+        );
+      } else if (inlineSelectedLines.length === 1) {
+        const line = inlineSelectedLines[0];
+        result = await createProductionRun({
+          runCode: newCode.trim() || "AUTO",
+          quantity: line.quantity,
+          orderLineId: line.id,
+          sku: line.style || newSku || null,
+          productName: line.product || newProductName || null,
+          productColor: newProductColor || null,
+          productSize: line.size || null,
+          ...config,
+        });
+      }
+
+      closeInlineForm();
+      toast("Production run created", "success");
+      if (result?.success && result.data) {
+        router.push(`/production-runs/${result.data.id}`);
+      } else {
+        router.refresh();
+      }
+    });
+  }
+
+  // Handle standalone PO selection
+  function handleStandaloneOrderSelect(orderId: string) {
+    const id = parseInt(orderId);
+    setStandaloneOrderId(id || null);
+    if (id && acknowledgedOrders) {
+      const order = acknowledgedOrders.find((o) => o.id === id);
+      if (order) {
+        const linesWithoutRuns = order.orderLines.filter((l) => l._count.productionRuns === 0);
+        if (linesWithoutRuns.length > 0) {
+          setBatchLines(linesWithoutRuns);
+          setNewProductName(linesWithoutRuns[0]?.product || "");
+        }
+      }
+    } else {
+      setBatchLines([]);
+      setStandaloneOrderId(null);
+    }
+  }
 
   function toggleColumn(status: string) {
     setVisibleColumns((prev) => {
@@ -180,6 +297,7 @@ export function ProductionRunsClient({
   async function handleCreate() {
     startTransition(async () => {
       const config = getSharedConfig();
+      let result;
 
       if (batchLines.length > 0) {
         // Batch mode — create ONE run with size breakdown
@@ -191,7 +309,7 @@ export function ProductionRunsClient({
         }));
         // Get order ID from first line's order
         const firstOrderLineId = batchLines[0]?.id;
-        await createProductionRun(
+        result = await createProductionRun(
           {
             runCode: "AUTO",
             orderId: null, // Will be set from order context
@@ -205,7 +323,7 @@ export function ProductionRunsClient({
         );
       } else {
         // Single run
-        await createProductionRun({
+        result = await createProductionRun({
           runCode: newCode.trim() || "AUTO",
           quantity: newQty,
           orderLineId: filterOrderLineId || (pf?.orderLineId) || null,
@@ -218,13 +336,16 @@ export function ProductionRunsClient({
       }
 
       // Reset
-      setNewCode("AUTO"); setNewQty(0); setNewSku(""); setNewProductName(""); setNewProductColor("");
-      setNewYarnLotId(null); setNewYarnColourCode(""); setNewYarnLotNumber("");
-      setNewIndividualTagging(false); setNewWashing(""); setNewTemp("");
-      setNewFinishing(""); setNewFinisherName(""); setNewGauge(""); setNewPly("");
+      resetFormFields();
       setBatchLines([]);
       setShowCreate(false);
-      router.refresh();
+      setStandaloneOrderId(null);
+      toast("Production run created", "success");
+      if (result?.success && result.data) {
+        router.push(`/production-runs/${result.data.id}`);
+      } else {
+        router.refresh();
+      }
     });
   }
 
@@ -241,6 +362,118 @@ export function ProductionRunsClient({
       await updateProductionRun(runId, { supplierId });
       router.refresh();
     });
+  }
+
+  // ── Reusable manufacturing details form (used both inline and standalone) ──
+  function ManufacturingForm({ onSubmit, onCancel, submitLabel, lines }: { onSubmit: () => void; onCancel: () => void; submitLabel: string; lines: OrderLineDetail[] }) {
+    return (
+      <div className="space-y-4">
+        {/* Show sizes being created */}
+        {lines.length > 0 && (
+          <div className="bg-badge-emerald-bg/20 rounded-lg p-3">
+            <p className="text-[9px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-2">Sizes in this run:</p>
+            <div className="flex flex-wrap gap-1.5">
+              {lines.map((line) => (
+                <div key={line.id} className="flex items-center gap-1.5 px-2 py-1 bg-card border border-border rounded-md text-[9px]">
+                  {line.style && <span className="font-mono-brand font-bold text-primary">{line.style}</span>}
+                  <span className="text-foreground font-medium">{line.size || "One Size"}</span>
+                  <span className="font-mono-brand text-muted-foreground">×{line.quantity}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Yarn Selection */}
+        <div className="bg-secondary/30 rounded-lg p-3">
+          <p className="text-[9px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-2">Yarn Selection</p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <div>
+              <label className="block text-[8px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1">Yarn Lot</label>
+              <select value={newYarnLotId ?? ""} onChange={(e) => handleYarnLotSelect(e.target.value)} className="w-full h-[34px] px-2.5 bg-background border border-border rounded-lg text-[11px] text-foreground outline-none focus:ring-1 focus:ring-ring">
+                <option value="">Select yarn lot...</option>
+                {Array.from(yarnLotsByColour.entries()).map(([code, lots]) => (
+                  <optgroup key={code} label={`${code} — ${lots[0].colourName}`}>
+                    {lots.map((l) => (
+                      <option key={l.lineId} value={l.lineId}>Lot {l.lotNumber} — {l.remainingKg.toFixed(2)} kg</option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[8px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1">Colour Code</label>
+              <input value={newYarnColourCode} onChange={(e) => setNewYarnColourCode(e.target.value)} className="w-full h-[34px] px-2.5 bg-background border border-border rounded-lg text-[11px] font-mono-brand text-foreground outline-none focus:ring-1 focus:ring-ring" placeholder="Auto from lot" readOnly={!!newYarnLotId} />
+            </div>
+            <div>
+              <label className="block text-[8px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1">Lot Number</label>
+              <input value={newYarnLotNumber} onChange={(e) => setNewYarnLotNumber(e.target.value)} className="w-full h-[34px] px-2.5 bg-background border border-border rounded-lg text-[11px] font-mono-brand text-foreground outline-none focus:ring-1 focus:ring-ring" placeholder="Auto from lot" readOnly={!!newYarnLotId} />
+            </div>
+          </div>
+          {yarnLots.length === 0 && <p className="text-[9px] text-badge-orange-text mt-2">No yarn stock available. Upload a delivery note in Materials first.</p>}
+        </div>
+
+        {/* Manufacturing Config */}
+        <div>
+          <p className="text-[9px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-2">Manufacturing Config</p>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+            <div>
+              <label className="block text-[8px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1">Washing</label>
+              <input value={newWashing} onChange={(e) => setNewWashing(e.target.value)} className="w-full h-[34px] px-2.5 bg-background border border-border rounded-lg text-[11px] text-foreground outline-none focus:ring-1 focus:ring-ring" placeholder="Program A" />
+            </div>
+            <div>
+              <label className="block text-[8px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1">Temp (°C)</label>
+              <input value={newTemp} onChange={(e) => setNewTemp(e.target.value)} className="w-full h-[34px] px-2.5 bg-background border border-border rounded-lg text-[11px] font-mono-brand text-foreground outline-none focus:ring-1 focus:ring-ring text-right" placeholder="30" />
+            </div>
+            <div>
+              <label className="block text-[8px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1">Finishing</label>
+              <input value={newFinishing} onChange={(e) => setNewFinishing(e.target.value)} className="w-full h-[34px] px-2.5 bg-background border border-border rounded-lg text-[11px] text-foreground outline-none focus:ring-1 focus:ring-ring" placeholder="Steam press" />
+            </div>
+            <div>
+              <label className="block text-[8px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1">Finisher</label>
+              <input value={newFinisherName} onChange={(e) => setNewFinisherName(e.target.value)} className="w-full h-[34px] px-2.5 bg-background border border-border rounded-lg text-[11px] text-foreground outline-none focus:ring-1 focus:ring-ring" placeholder="e.g. Manteco" />
+            </div>
+            <div>
+              <label className="block text-[8px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1">Gauge</label>
+              <input value={newGauge} onChange={(e) => setNewGauge(e.target.value)} className="w-full h-[34px] px-2.5 bg-background border border-border rounded-lg text-[11px] text-foreground outline-none focus:ring-1 focus:ring-ring" placeholder="12GG" />
+            </div>
+            <div>
+              <label className="block text-[8px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1">Ply</label>
+              <input value={newPly} onChange={(e) => setNewPly(e.target.value)} className="w-full h-[34px] px-2.5 bg-background border border-border rounded-lg text-[11px] text-foreground outline-none focus:ring-1 focus:ring-ring" placeholder="4-ply" />
+            </div>
+          </div>
+        </div>
+
+        {/* Tagging mode — two options */}
+        <div>
+          <p className="text-[8px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1.5">Tagging Mode</p>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setNewIndividualTagging(true)}
+              className={`h-[34px] px-3 rounded-lg text-[11px] font-medium border transition-all ${newIndividualTagging ? "bg-badge-purple-bg border-badge-purple-text/30 text-badge-purple-text" : "bg-background border-border text-muted-foreground"}`}
+            >
+              {newIndividualTagging && "✓ "}Individual Tagging
+            </button>
+            <button
+              type="button"
+              onClick={() => setNewIndividualTagging(false)}
+              className={`h-[34px] px-3 rounded-lg text-[11px] font-medium border transition-all ${!newIndividualTagging ? "bg-badge-blue-bg border-badge-blue-text/30 text-badge-blue-text" : "bg-background border-border text-muted-foreground"}`}
+            >
+              {!newIndividualTagging && "✓ "}Bulk Mode
+            </button>
+          </div>
+        </div>
+
+        {/* Submit */}
+        <div className="flex gap-2 pt-1">
+          <button onClick={onSubmit} disabled={isPending} className="px-4 py-2 rounded-lg bg-foreground text-background text-[10px] font-bold uppercase tracking-wider disabled:opacity-50 transition-colors">
+            {isPending ? "Creating..." : submitLabel}
+          </button>
+          <button onClick={onCancel} className="px-3 py-2 text-[10px] text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -269,7 +502,7 @@ export function ProductionRunsClient({
             </button>
           </div>
           <button
-            onClick={() => setShowCreate(!showCreate)}
+            onClick={() => { closeInlineForm(); setShowCreate(!showCreate); }}
             className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-[11px] font-semibold uppercase tracking-wider text-white transition-colors"
             style={{ backgroundColor: "hsl(25 95% 53%)" }}
           >
@@ -278,18 +511,51 @@ export function ProductionRunsClient({
         </div>
       </div>
 
-      {/* Create form */}
+      {/* ── Standalone Create form (from top button / homepage) ── */}
       {showCreate && (
         <div className="bg-card border border-border rounded-xl p-5 mb-6 space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-[12px] font-bold uppercase tracking-wider text-foreground">
-              {batchLines.length > 0 ? `New Production Runs (${batchLines.length} sizes)` : "New Production Run"}
+              {batchLines.length > 0 ? `New Run — ${batchLines.length} Sizes` : "New Production Run"}
             </h3>
-            <button onClick={() => { setShowCreate(false); setBatchLines([]); }} className="text-[10px] text-muted-foreground hover:text-foreground">✕ Close</button>
+            <button onClick={() => { setShowCreate(false); setBatchLines([]); setStandaloneOrderId(null); resetFormFields(); }} className="text-[10px] text-muted-foreground hover:text-foreground">✕ Close</button>
           </div>
 
-          {/* Batch mode — show sizes being created */}
-          {batchLines.length > 0 && (
+          {/* ── PO Dropdown — link to an existing order ── */}
+          {acknowledgedOrders && acknowledgedOrders.length > 0 && (
+            <div className="bg-badge-blue-bg/20 rounded-lg p-3">
+              <label className="block text-[9px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1.5">Link to Purchase Order</label>
+              <select
+                value={standaloneOrderId ?? ""}
+                onChange={(e) => handleStandaloneOrderSelect(e.target.value)}
+                className="w-full h-[38px] px-3 bg-background border border-border rounded-lg text-[12px] text-foreground outline-none focus:ring-1 focus:ring-ring"
+              >
+                <option value="">No PO — standalone run</option>
+                {acknowledgedOrders.filter((o) => o.orderLines.some((l) => l._count.productionRuns === 0)).map((order) => {
+                  const pendingLines = order.orderLines.filter((l) => l._count.productionRuns === 0);
+                  return (
+                    <option key={order.id} value={order.id}>
+                      {order.orderRef} — {pendingLines.length} size{pendingLines.length !== 1 ? "s" : ""}, {pendingLines.reduce((s, l) => s + l.quantity, 0)} units
+                    </option>
+                  );
+                })}
+              </select>
+              {standaloneOrderId && batchLines.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {batchLines.map((line) => (
+                    <div key={line.id} className="flex items-center gap-1.5 px-2 py-1 bg-card border border-border rounded-md text-[9px]">
+                      {line.style && <span className="font-mono-brand font-bold text-primary">{line.style}</span>}
+                      <span className="text-foreground font-medium">{line.size || "One Size"}</span>
+                      <span className="font-mono-brand text-muted-foreground">×{line.quantity}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Batch mode — show sizes being created (only for non-PO-dropdown batch) */}
+          {batchLines.length > 0 && !standaloneOrderId && (
             <div className="bg-badge-emerald-bg/30 rounded-lg p-3">
               <p className="text-[10px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-2">Creating runs for:</p>
               <div className="flex flex-wrap gap-2">
@@ -301,12 +567,11 @@ export function ProductionRunsClient({
                   </div>
                 ))}
               </div>
-              <p className="text-[9px] text-muted-foreground mt-2">Set the shared manufacturing details below. Each size will get its own production run.</p>
             </div>
           )}
 
           {/* Single mode — show pre-fill info */}
-          {batchLines.length === 0 && pf?.product && (
+          {batchLines.length === 0 && !standaloneOrderId && pf?.product && (
             <div className="flex items-center gap-2 p-3 bg-badge-blue-bg/30 rounded-lg">
               <Badge label={`Order line #${pf.orderLineId}`} bgClass="bg-badge-blue-bg" textClass="text-badge-blue-text" />
               <span className="text-[11px] text-foreground">
@@ -380,9 +645,22 @@ export function ProductionRunsClient({
             )}
             <div>
               <label className="block text-[9px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1.5">Tagging</label>
-              <button type="button" onClick={() => setNewIndividualTagging(!newIndividualTagging)} className={`w-full h-[38px] px-3 rounded-lg text-[12px] font-medium border transition-all text-left ${newIndividualTagging ? "bg-badge-purple-bg border-badge-purple-text/30 text-badge-purple-text" : "bg-background border-border text-muted-foreground"}`}>
-                {newIndividualTagging ? "✓ Individual" : "Bulk Mode"}
-              </button>
+              <div className="flex gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setNewIndividualTagging(true)}
+                  className={`flex-1 h-[38px] px-2 rounded-lg text-[11px] font-medium border transition-all ${newIndividualTagging ? "bg-badge-purple-bg border-badge-purple-text/30 text-badge-purple-text" : "bg-background border-border text-muted-foreground"}`}
+                >
+                  {newIndividualTagging && "✓ "}Individual
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setNewIndividualTagging(false)}
+                  className={`flex-1 h-[38px] px-2 rounded-lg text-[11px] font-medium border transition-all ${!newIndividualTagging ? "bg-badge-blue-bg border-badge-blue-text/30 text-badge-blue-text" : "bg-background border-border text-muted-foreground"}`}
+                >
+                  {!newIndividualTagging && "✓ "}Bulk
+                </button>
+              </div>
             </div>
           </div>
           )}
@@ -403,7 +681,7 @@ export function ProductionRunsClient({
             </div>
             <div>
               <label className="block text-[9px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1.5">Finisher</label>
-              <input value={newFinisherName} onChange={(e) => setNewFinisherName(e.target.value)} className="w-full h-[38px] px-3 bg-background border border-border rounded-lg text-[12px] text-foreground outline-none focus:ring-1 focus:ring-ring" placeholder="Company" />
+              <input value={newFinisherName} onChange={(e) => setNewFinisherName(e.target.value)} className="w-full h-[38px] px-3 bg-background border border-border rounded-lg text-[12px] text-foreground outline-none focus:ring-1 focus:ring-ring" placeholder="e.g. Manteco" />
             </div>
             <div>
               <label className="block text-[9px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1.5">Gauge</label>
@@ -418,9 +696,9 @@ export function ProductionRunsClient({
           {/* Submit */}
           <div className="flex gap-2 pt-2">
             <button onClick={handleCreate} disabled={isPending} className="px-5 py-2.5 rounded-lg bg-foreground text-background text-[11px] font-bold uppercase tracking-wider disabled:opacity-50 transition-colors">
-              {isPending ? "Creating..." : batchLines.length > 0 ? `Create ${batchLines.length} Production Runs` : "Create Production Run"}
+              {isPending ? "Creating..." : batchLines.length > 0 ? `Create Run (${batchLines.length} sizes)` : "Create Production Run"}
             </button>
-            <button onClick={() => setShowCreate(false)} className="px-4 py-2 text-[11px] text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
+            <button onClick={() => { setShowCreate(false); setBatchLines([]); setStandaloneOrderId(null); resetFormFields(); }} className="px-4 py-2 text-[11px] text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
           </div>
         </div>
       )}
@@ -459,87 +737,139 @@ export function ProductionRunsClient({
       {acknowledgedOrders && acknowledgedOrders.filter((o) => o.orderLines.some((l) => l._count.productionRuns === 0)).length > 0 && (
         <div className="mb-6">
           <h2 className="text-[11px] font-bold uppercase tracking-wider text-foreground mb-3 flex items-center gap-2">
-            <span className="w-5 h-5 rounded-full bg-badge-emerald-text text-white flex items-center justify-center text-[10px] font-bold">{acknowledgedOrders.length}</span>
+            <span className="w-5 h-5 rounded-full bg-badge-emerald-text text-white flex items-center justify-center text-[10px] font-bold">{acknowledgedOrders.filter((o) => o.orderLines.some((l) => l._count.productionRuns === 0)).length}</span>
             Orders Ready to Start
           </h2>
           <div className="space-y-2">
             {acknowledgedOrders.filter((o) => o.orderLines.some((l) => l._count.productionRuns === 0)).map((order) => {
               const isOrderExpanded = expandedOrderId === order.id;
               const linesWithoutRuns = order.orderLines.filter((l) => l._count.productionRuns === 0);
+              const isInlineFormOpen = inlineFormOrderId === order.id;
               return (
-                <div key={order.id} className="bg-card border-2 border-badge-emerald-text/20 rounded-xl overflow-hidden">
-                  {/* Order header — click to expand */}
-                  <button
-                    onClick={() => setExpandedOrderId(isOrderExpanded ? null : order.id)}
-                    className="w-full flex items-center gap-4 px-5 py-4 text-left hover:bg-secondary/20 transition-colors"
+                <div key={order.id} className={`bg-card border-2 rounded-xl overflow-hidden transition-all ${isInlineFormOpen ? "border-primary/40 ring-1 ring-primary/20" : "border-badge-emerald-text/20"}`}>
+                  {/* Order header — always shows PO ref */}
+                  <div
+                    onClick={() => {
+                      if (isInlineFormOpen) {
+                        closeInlineForm();
+                        setExpandedOrderId(null);
+                      } else {
+                        setExpandedOrderId(isOrderExpanded ? null : order.id);
+                      }
+                    }}
+                    className="w-full flex items-center gap-3 px-5 py-4 hover:bg-secondary/20 transition-colors cursor-pointer"
                   >
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <p className="text-[13px] font-bold text-foreground">{order.orderRef}</p>
                         <Badge
-                          label={order.status === "CONFIRMED" ? "Needs Ack" : "Ready"}
+                          label={order.status === "CONFIRMED" ? "New" : "Ready"}
                           bgClass={order.status === "CONFIRMED" ? "bg-badge-blue-bg" : "bg-badge-emerald-bg"}
                           textClass={order.status === "CONFIRMED" ? "text-badge-blue-text" : "text-badge-emerald-text"}
                         />
+                        {isInlineFormOpen && (
+                          <Badge label="Setting up run" bgClass="bg-primary/10" textClass="text-primary" />
+                        )}
                       </div>
                       <p className="text-[10px] text-muted-foreground">
                         {order.orderLines.length} line{order.orderLines.length !== 1 ? "s" : ""} · {order.totalQuantity} units
                       </p>
                     </div>
-                    {isOrderExpanded ? <ChevronUp size={14} className="text-muted-foreground" /> : <ChevronDown size={14} className="text-muted-foreground" />}
-                  </button>
-
-                  {/* Expanded — show each line with sizes */}
-                  {isOrderExpanded && (
-                    <div className="border-t border-badge-emerald-text/10">
-                      {/* Start All button */}
-                      <div className="px-5 py-3 bg-badge-emerald-bg/30 flex items-center justify-between">
-                        <p className="text-[10px] text-muted-foreground">{order.orderLines.length} sizes · {order.totalQuantity} total units</p>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {!isInlineFormOpen && (
                         <button
-                          onClick={() => {
-                            setBatchLines(linesWithoutRuns);
-                            setNewProductName(linesWithoutRuns[0]?.product || "");
-                            setShowCreate(true);
-                            window.scrollTo({ top: 0, behavior: "smooth" });
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openInlineForm(order.id, linesWithoutRuns, "all");
                           }}
-                          className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider text-white"
+                          className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-wider text-white shrink-0"
                           style={{ backgroundColor: "hsl(25 95% 53%)" }}
                         >
-                          Start All {linesWithoutRuns.length} Sizes
+                          ▶ Start All
                         </button>
-                      </div>
-                      {order.orderLines.map((line) => (
-                        <div key={line.id} className="px-5 py-3 border-b border-border last:border-0 hover:bg-secondary/10">
-                          <div className="flex items-center gap-4">
-                            <div className="flex-1 min-w-0">
-                              <p className="text-[12px] font-semibold text-foreground">{line.product}</p>
-                              <div className="flex items-center gap-3 mt-1 text-[10px] text-muted-foreground">
-                                {line.style && <span className="font-mono-brand font-bold text-primary">{line.style}</span>}
-                                {line.size && <span>Size: <span className="text-foreground font-medium">{line.size}</span></span>}
-                                <span>Qty: <span className="font-mono-brand font-bold text-foreground">{line.quantity}</span></span>
-                                {line.unitPrice != null && <span>€{line.unitPrice.toFixed(2)}/unit</span>}
-                                {line._count.productionRuns > 0 && (
-                                  <Badge label={`${line._count.productionRuns} run${line._count.productionRuns !== 1 ? "s" : ""}`} bgClass="bg-badge-gray-bg" textClass="text-badge-gray-text" />
+                      )}
+                      {isOrderExpanded || isInlineFormOpen ? <ChevronUp size={14} className="text-muted-foreground" /> : <ChevronDown size={14} className="text-muted-foreground" />}
+                    </div>
+                  </div>
+
+                  {/* Expanded — show lines + inline form */}
+                  {(isOrderExpanded || isInlineFormOpen) && (
+                    <div className="border-t border-badge-emerald-text/10">
+
+                      {/* ── Step 1: Size selection (before inline form is opened) ── */}
+                      {!isInlineFormOpen && (
+                        <>
+                          {/* Start All button */}
+                          <div className="px-5 py-3 bg-badge-emerald-bg/30 flex items-center justify-between">
+                            <p className="text-[10px] text-muted-foreground">{linesWithoutRuns.length} size{linesWithoutRuns.length !== 1 ? "s" : ""} · {linesWithoutRuns.reduce((s, l) => s + l.quantity, 0)} total units</p>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openInlineForm(order.id, linesWithoutRuns, "all");
+                              }}
+                              className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider text-white"
+                              style={{ backgroundColor: "hsl(25 95% 53%)" }}
+                            >
+                              Start All {linesWithoutRuns.length} Sizes
+                            </button>
+                          </div>
+
+                          {/* Individual lines */}
+                          {order.orderLines.map((line) => (
+                            <div key={line.id} className="px-5 py-3 border-b border-border last:border-0 hover:bg-secondary/10">
+                              <div className="flex items-center gap-4">
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-[12px] font-semibold text-foreground">{line.product}</p>
+                                  <div className="flex items-center gap-3 mt-1 text-[10px] text-muted-foreground">
+                                    {line.style && <span className="font-mono-brand font-bold text-primary">{line.style}</span>}
+                                    {line.size && <span>Size: <span className="text-foreground font-medium">{line.size}</span></span>}
+                                    <span>Qty: <span className="font-mono-brand font-bold text-foreground">{line.quantity}</span></span>
+                                    {line.unitPrice != null && <span>€{line.unitPrice.toFixed(2)}/unit</span>}
+                                    {line._count.productionRuns > 0 && (
+                                      <Badge label={`${line._count.productionRuns} run${line._count.productionRuns !== 1 ? "s" : ""}`} bgClass="bg-badge-gray-bg" textClass="text-badge-gray-text" />
+                                    )}
+                                  </div>
+                                </div>
+                                {line._count.productionRuns === 0 && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      openInlineForm(order.id, linesWithoutRuns, "single", line);
+                                    }}
+                                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider text-white shrink-0"
+                                    style={{ backgroundColor: "hsl(25 95% 53%)" }}
+                                  >
+                                    Start Run
+                                  </button>
                                 )}
                               </div>
                             </div>
-                            <button
-                              onClick={() => {
-                                setNewSku(line.style || "");
-                                setNewProductName(line.product);
-                                setNewQty(line.quantity);
-                                setShowCreate(true);
-                                // Scroll to top of form
-                                window.scrollTo({ top: 0, behavior: "smooth" });
-                              }}
-                              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider text-white shrink-0"
-                              style={{ backgroundColor: "hsl(25 95% 53%)" }}
-                            >
-                              Start Run
-                            </button>
+                          ))}
+                        </>
+                      )}
+
+                      {/* ── Step 2: Inline manufacturing form (inside the card) ── */}
+                      {isInlineFormOpen && (
+                        <div className="px-5 py-4 bg-secondary/10">
+                          <div className="flex items-center gap-2 mb-3">
+                            <ChevronRight size={12} className="text-primary" />
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-foreground">
+                              {inlineSelectedLines.length > 1
+                                ? `Setting up run for ${inlineSelectedLines.length} sizes`
+                                : `Setting up run for ${inlineSelectedLines[0]?.product || "—"} ${inlineSelectedLines[0]?.size || ""}`
+                              }
+                            </p>
                           </div>
+                          <ManufacturingForm
+                            lines={inlineSelectedLines}
+                            onSubmit={handleInlineCreate}
+                            onCancel={closeInlineForm}
+                            submitLabel={inlineSelectedLines.length > 1 ? `Create Run (${inlineSelectedLines.length} sizes)` : "Create Run"}
+                          />
                         </div>
-                      ))}
+                      )}
+
+                      {/* Footer link */}
                       <div className="px-5 py-2 bg-secondary/20">
                         <Link href={`/orders/${order.id}`} className="text-[10px] text-primary hover:underline">View full order details →</Link>
                       </div>
@@ -635,13 +965,15 @@ export function ProductionRunsClient({
                         </div>
                       )}
                       <div className="flex items-center gap-1.5 mt-2">
-                        <Link
-                          href={`/production-runs/${run.id}/scan`}
-                          className="text-[8px] font-bold uppercase tracking-wider px-2 py-0.5 rounded text-white"
-                          style={{ backgroundColor: "hsl(25 95% 53%)" }}
-                        >
-                          Scan
-                        </Link>
+                        {["IN_PRODUCTION", "QC", "READY_TO_SHIP", "SHIPPED"].includes(run.status) && (
+                          <Link
+                            href={`/production-runs/${run.id}/scan`}
+                            className="text-[8px] font-bold uppercase tracking-wider px-2 py-0.5 rounded text-white"
+                            style={{ backgroundColor: "hsl(25 95% 53%)" }}
+                          >
+                            Scan
+                          </Link>
+                        )}
                         <Link href={`/production-runs/${run.id}`} className="text-[8px] text-primary hover:underline">
                           Details
                         </Link>
@@ -746,14 +1078,16 @@ export function ProductionRunsClient({
                   )}
 
                   <div className="flex items-center gap-4">
-                    <Link
-                      href={`/production-runs/${run.id}/scan`}
-                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider text-white"
-                      style={{ backgroundColor: "hsl(25 95% 53%)" }}
-                    >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2" /><path d="M17 3h2a2 2 0 0 1 2 2v2" /><path d="M21 17v2a2 2 0 0 1-2 2h-2" /><path d="M7 21H5a2 2 0 0 1-2-2v-2" /><line x1="8" y1="12" x2="16" y2="12" /></svg>
-                      Scan
-                    </Link>
+                    {["IN_PRODUCTION", "QC", "READY_TO_SHIP", "SHIPPED"].includes(run.status) && (
+                      <Link
+                        href={`/production-runs/${run.id}/scan`}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider text-white"
+                        style={{ backgroundColor: "hsl(25 95% 53%)" }}
+                      >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2" /><path d="M17 3h2a2 2 0 0 1 2 2v2" /><path d="M21 17v2a2 2 0 0 1-2 2h-2" /><path d="M7 21H5a2 2 0 0 1-2-2v-2" /><line x1="8" y1="12" x2="16" y2="12" /></svg>
+                        Scan
+                      </Link>
+                    )}
                     <Link href={`/production-runs/${run.id}`} className="text-[10px] font-semibold text-primary hover:underline">
                       Details
                     </Link>
@@ -790,6 +1124,20 @@ export function ProductionRunsClient({
           </div>
         )}
       </div>
+      )}
+      {!isAdmin && (
+        <ContextualHelp
+          pageId="production-runs"
+          title="Production Runs"
+          steps={[
+            { icon: "📋", text: "Check 'Orders Ready to Start' for new work from Sheep Inc" },
+            { icon: "▶️", text: "Tap an order, then 'Start All Sizes' or pick individual sizes" },
+            { icon: "🧶", text: "Choose your yarn lot and fill in washing, finishing details" },
+            { icon: "📱", text: "Once a run is created, tap 'Scan' to tag each garment" },
+            { icon: "📦", text: "When done, move the run to 'Ready to Ship' then 'Shipped'" },
+          ]}
+          tip="Use List view on mobile — it's easier to use than the Pipeline columns."
+        />
       )}
     </div>
   );

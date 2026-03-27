@@ -38,19 +38,20 @@ export function Shell({ user, children }: ShellProps) {
 
   return (
     <div className="h-screen flex flex-col md:flex-row overflow-hidden bg-background">
-      {/* ── Desktop Sidebar (icon rail) ── */}
-      <div className="hidden md:flex flex-col w-14 bg-card border-r border-border shrink-0">
+      {/* ── Desktop Sidebar (icon + label rail) ── */}
+      <div className="hidden md:flex flex-col w-[160px] bg-card border-r border-border shrink-0">
         {/* Logo / Home */}
         <Link
           href="/dashboard"
-          className="flex items-center justify-center h-14 border-b border-border hover:bg-secondary/50 transition-colors"
+          className="flex items-center gap-2.5 h-14 px-4 border-b border-border hover:bg-secondary/50 transition-colors"
           title="Home"
         >
-          <Disc size={20} className="text-foreground" />
+          <Disc size={18} className="text-foreground shrink-0" />
+          <span className="text-[11px] font-bold uppercase tracking-wider text-foreground">The Loom</span>
         </Link>
 
-        {/* Section icons */}
-        <div className="flex-1 flex flex-col py-2 gap-1">
+        {/* Section links with labels */}
+        <div className="flex-1 flex flex-col py-2 gap-0.5">
           {sections.map((section) => {
             const Icon = section.icon;
             const isActive = section.id === activeSection.id;
@@ -60,7 +61,7 @@ export function Shell({ user, children }: ShellProps) {
                 href={section.routePrefix}
                 title={section.label}
                 className={cn(
-                  "relative flex items-center justify-center h-10 mx-1 rounded-lg transition-all",
+                  "relative flex items-center gap-2.5 h-10 mx-1.5 px-2.5 rounded-lg transition-all",
                   isActive
                     ? "bg-secondary text-foreground"
                     : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
@@ -72,27 +73,30 @@ export function Shell({ user, children }: ShellProps) {
                     style={{ backgroundColor: section.color }}
                   />
                 )}
-                <Icon size={18} />
+                <Icon size={16} className="shrink-0" />
+                <span className="text-[11px] font-semibold uppercase tracking-wider truncate">{section.label}</span>
               </Link>
             );
           })}
         </div>
 
         {/* Settings + user */}
-        <div className="flex flex-col items-center py-3 gap-2 border-t border-border">
+        <div className="flex flex-col py-3 gap-1 border-t border-border px-1.5">
           <Link
             href="/settings"
-            className="flex items-center justify-center w-8 h-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
+            className="flex items-center gap-2.5 h-9 px-2.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
             title="Settings"
           >
-            <Settings size={16} />
+            <Settings size={15} className="shrink-0" />
+            <span className="text-[10px] font-medium uppercase tracking-wider">Settings</span>
           </Link>
           <button
             onClick={handleSignOut}
-            className="flex items-center justify-center w-8 h-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
+            className="flex items-center gap-2.5 h-9 px-2.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors text-left"
             title="Sign out"
           >
-            <LogOut size={16} />
+            <LogOut size={15} className="shrink-0" />
+            <span className="text-[10px] font-medium uppercase tracking-wider">Sign out</span>
           </button>
         </div>
       </div>
@@ -225,7 +229,7 @@ export function Shell({ user, children }: ShellProps) {
 
             <div className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
               <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground px-3 mb-2">
-                Modules
+                Menu
               </p>
               {sections.map((section) => {
                 const Icon = section.icon;
@@ -267,7 +271,7 @@ export function Shell({ user, children }: ShellProps) {
             <div className="border-t border-border px-5 py-4 flex items-center justify-between">
               <div>
                 <p className="text-[12px] font-medium text-foreground">{user.name}</p>
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{user.role}</p>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{user.role === "SUPPLIER" ? "Factory User" : user.role === "ADMIN" ? "Manager" : user.role}</p>
               </div>
               <button
                 onClick={handleSignOut}

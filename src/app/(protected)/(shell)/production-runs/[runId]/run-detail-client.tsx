@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { ContextualHelp } from "@/components/ui/contextual-help";
 import { ArrowLeft, Check, Lock } from "lucide-react";
 import { StatusBadge, Badge } from "@/components/ui/badge";
 import { RUN_STATUS_DISPLAY, RUN_STATUS_ORDER, getAllowedTransitions, isAdminOnlyStatus, formatDate } from "@/types/supply-chain";
@@ -369,16 +370,22 @@ export function RunDetailClient({ run, role }: { run: RunFull; role: string }) {
           </div>
         </div>
 
-        {/* Scan button */}
+        {/* Scan button — only available once IN_PRODUCTION */}
         <div className="flex items-center gap-3 mb-4">
-          <Link
-            href={`/production-runs/${run.id}/scan`}
-            className="inline-flex items-center gap-2 px-6 py-3 rounded-xl text-[12px] font-bold uppercase tracking-wider text-white transition-all hover:scale-[1.02]"
-            style={{ backgroundColor: "hsl(25 95% 53%)" }}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2" /><path d="M17 3h2a2 2 0 0 1 2 2v2" /><path d="M21 17v2a2 2 0 0 1-2 2h-2" /><path d="M7 21H5a2 2 0 0 1-2-2v-2" /><line x1="8" y1="12" x2="16" y2="12" /></svg>
-            Start Scanning
-          </Link>
+          {["IN_PRODUCTION", "QC", "READY_TO_SHIP", "SHIPPED"].includes(run.status) ? (
+            <Link
+              href={`/production-runs/${run.id}/scan`}
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl text-[12px] font-bold uppercase tracking-wider text-white transition-all hover:scale-[1.02]"
+              style={{ backgroundColor: "hsl(25 95% 53%)" }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2" /><path d="M17 3h2a2 2 0 0 1 2 2v2" /><path d="M21 17v2a2 2 0 0 1-2 2h-2" /><path d="M7 21H5a2 2 0 0 1-2-2v-2" /><line x1="8" y1="12" x2="16" y2="12" /></svg>
+              Start Scanning
+            </Link>
+          ) : (
+            <p className="text-[11px] text-muted-foreground">
+              Scanning available once the run is moved to <span className="font-semibold text-foreground">In Production</span>.
+            </p>
+          )}
         </div>
 
         {/* Batch tags (bulk mode) */}
@@ -490,6 +497,19 @@ export function RunDetailClient({ run, role }: { run: RunFull; role: string }) {
           <p className="text-[11px] text-muted-foreground">No garments yet. Start scanning to add them.</p>
         )}
       </div>
+      {role !== "ADMIN" && (
+        <ContextualHelp
+          pageId="run-detail"
+          title="Run Details"
+          steps={[
+            { icon: "📊", text: "This page shows all info about one production run" },
+            { icon: "⏩", text: "Tap a status step at the top to move the run forward" },
+            { icon: "📱", text: "Tap 'Start Scanning' to scan garments into this run" },
+            { icon: "📦", text: "When all garments are scanned, move to 'Ready to Ship'" },
+          ]}
+          tip="You can move a run backwards if you made a mistake — just tap the previous step."
+        />
+      )}
     </div>
   );
 }

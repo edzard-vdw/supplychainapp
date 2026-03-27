@@ -128,9 +128,7 @@ export function OrdersClient({
           const { importPOPdf } = await import("@/lib/actions/po-pdf-parser");
           const result = await importPOPdf(poPdfPreview);
           if (result.success && result.data) {
-            setPOImportResult(result.data);
-            setPOPdfPreview(null);
-            router.refresh();
+            router.push(`/orders/${result.data.orderId}`);
           } else {
             setPOError(result.error || "Import failed");
           }
@@ -141,9 +139,7 @@ export function OrdersClient({
         const { importPO } = await import("@/lib/actions/po-import");
         const result = await importPO(poPreview);
         if (result.success && result.data) {
-          setPOImportResult(result.data);
-          setPOPreview(null);
-          router.refresh();
+          router.push(`/orders/${result.data.orderId}`);
         } else {
           setPOError(result.error || "Import failed");
         }
@@ -167,7 +163,7 @@ export function OrdersClient({
   async function handleCreate() {
     if (!newRef.trim()) return;
     startTransition(async () => {
-      await createOrder({
+      const result = await createOrder({
         orderRef: newRef.trim(),
         client: newClient || null,
         supplierId: newSupplierId,
@@ -180,7 +176,11 @@ export function OrdersClient({
       setNewQty(0);
       setNewDueDate("");
       setShowCreate(false);
-      router.refresh();
+      if (result.success && result.data) {
+        router.push(`/orders/${result.data.id}`);
+      } else {
+        router.refresh();
+      }
     });
   }
 

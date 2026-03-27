@@ -23,7 +23,7 @@ export function SupplierOrderActions({ orderId }: { orderId: number }) {
       className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-foreground text-background text-[11px] font-bold uppercase tracking-wider disabled:opacity-50 hover:bg-foreground/90 transition-colors"
     >
       <CheckCircle size={14} />
-      {isPending ? "..." : "Acknowledge"}
+      {isPending ? "..." : "Accept Order"}
     </button>
   );
 }

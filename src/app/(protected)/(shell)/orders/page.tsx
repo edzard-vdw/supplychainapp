@@ -10,7 +10,11 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
 
   const [orders, materials, suppliers] = await Promise.all([
     prisma.order.findMany({
-      where: supplierFilter,
+      where: {
+        ...supplierFilter,
+        // Suppliers should not see DRAFT orders (internal admin drafts)
+        ...(session.role !== "ADMIN" && { status: { not: "DRAFT" } }),
+      },
       orderBy: [{ priority: "desc" }, { createdAt: "desc" }],
       include: {
         supplier: { select: { id: true, name: true } },

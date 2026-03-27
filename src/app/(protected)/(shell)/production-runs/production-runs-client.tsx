@@ -55,6 +55,7 @@ export function ProductionRunsClient({
   suppliers,
   yarnLots,
   acknowledgedOrders,
+  pendingAcceptanceCount,
   filterOrderLineId,
   isAdmin,
   userSupplierId,
@@ -65,6 +66,7 @@ export function ProductionRunsClient({
   suppliers: SupplierOption[];
   yarnLots: YarnLotOption[];
   acknowledgedOrders?: AcknowledgedOrder[];
+  pendingAcceptanceCount?: number;
   filterOrderLineId?: number;
   isAdmin: boolean;
   userSupplierId: number | null;
@@ -732,6 +734,24 @@ export function ProductionRunsClient({
       </div>
 
       <p className="text-[10px] font-mono-brand text-muted-foreground mb-4">{filtered.length} run{filtered.length !== 1 ? "s" : ""}</p>
+
+      {/* ── Pending acceptance nudge — supplier has CONFIRMED orders they haven't accepted yet ── */}
+      {!isAdmin && pendingAcceptanceCount != null && pendingAcceptanceCount > 0 && (
+        <div className="mb-4 flex items-center gap-3 p-4 rounded-xl bg-badge-blue-bg/50 border border-badge-blue-text/20">
+          <div className="flex-1">
+            <p className="text-[12px] font-semibold text-foreground">
+              {pendingAcceptanceCount} new order{pendingAcceptanceCount !== 1 ? "s" : ""} waiting for your acceptance
+            </p>
+            <p className="text-[10px] text-muted-foreground">Go to Orders to review and accept before starting production.</p>
+          </div>
+          <Link
+            href="/orders"
+            className="px-4 py-2 rounded-lg bg-foreground text-background text-[11px] font-bold uppercase tracking-wider shrink-0"
+          >
+            View Orders →
+          </Link>
+        </div>
+      )}
 
       {/* ── Acknowledged Orders — ready to start (hide orders where all lines have runs) ── */}
       {acknowledgedOrders && acknowledgedOrders.filter((o) => o.orderLines.some((l) => l._count.productionRuns === 0)).length > 0 && (

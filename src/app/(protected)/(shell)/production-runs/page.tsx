@@ -41,18 +41,22 @@ export default async function ProductionRunsPage({ searchParams }: { searchParam
   ]);
 
   // Get acknowledged orders for this supplier (orders ready to start production)
-  const acknowledgedOrders = isSupplier
-    ? await prisma.order.findMany({
-        where: { supplierId: session.supplierId!, status: { in: ["ACKNOWLEDGED", "CONFIRMED"] } },
-        orderBy: { createdAt: "desc" },
-        include: {
-          orderLines: {
-            include: { _count: { select: { productionRuns: true } } },
+  // Only ACKNOWLEDGED orders — supplier must accept (CONFIRMED→ACKNOWLEDGED) on the Orders page first
+  const [acknowledgedOrders, pendingAcceptanceCount] = isSupplier
+    ? await Promise.all([
+        prisma.order.findMany({
+          where: { supplierId: session.supplierId!, status: "ACKNOWLEDGED" },
+          orderBy: { createdAt: "desc" },
+          include: {
+            orderLines: {
+              include: { _count: { select: { productionRuns: true } } },
+            },
+            _count: { select: { orderLines: true } },
           },
-          _count: { select: { orderLines: true } },
-        },
-      })
-    : [];
+        }),
+        prisma.order.count({ where: { supplierId: session.supplierId!, status: "CONFIRMED" } }),
+      ])
+    : [[], 0];
 
   // Group yarn lots by colour code for the dropdown
   const yarnLotOptions = yarnLots.map((l) => ({
@@ -71,6 +75,7 @@ export default async function ProductionRunsPage({ searchParams }: { searchParam
       suppliers={suppliers}
       yarnLots={yarnLotOptions}
       acknowledgedOrders={JSON.parse(JSON.stringify(acknowledgedOrders))}
+      pendingAcceptanceCount={pendingAcceptanceCount as number}
       filterOrderLineId={orderLineId}
       isAdmin={session.role === "ADMIN"}
       userSupplierId={session.supplierId}

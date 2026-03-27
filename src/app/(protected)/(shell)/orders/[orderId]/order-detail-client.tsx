@@ -91,7 +91,6 @@ export function OrderDetailClient({ order, materials, suppliers, editHistory, us
   const isDraft = order.status === "DRAFT";
   const isConfirmed = order.status === "CONFIRMED";
   const isInSupplierHands = ["ACKNOWLEDGED", "IN_PRODUCTION", "QC", "SHIPPED"].includes(order.status);
-  const isBackWithAdmin = ["SHIPPED", "RECEIVED", "DELIVERED"].includes(order.status);
   const canEdit = isAdmin && isDraft; // Only admin can edit in draft
 
   async function handlePOUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -616,8 +615,8 @@ export function OrderDetailClient({ order, materials, suppliers, editHistory, us
                           {line._count.productionRuns} run{line._count.productionRuns !== 1 ? "s" : ""} →
                         </Link>
                       )}
-                      {/* Start Production — pre-fills a run from this line */}
-                      {isInSupplierHands && (
+                      {/* Start Production — pre-fills a run from this line (only while actively producing, not after shipped) */}
+                      {["ACKNOWLEDGED", "IN_PRODUCTION"].includes(order.status) && (
                         <Link
                           href={`/production-runs?create=true&orderLineId=${line.id}&product=${encodeURIComponent(line.product)}&sku=${encodeURIComponent(line.style || "")}&size=${encodeURIComponent(line.size || "")}&qty=${line.quantity}`}
                           className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider text-white"

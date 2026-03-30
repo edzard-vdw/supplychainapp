@@ -1,0 +1,32 @@
+services:
+  db:
+    image: mysql:8.0
+    container_name: sheep-supply-chain-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: supplychain
+      MYSQL_DATABASE: supply_chain
+    volumes:
+      - supply_chain_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-psupplychain"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  web:
+    build: .
+    container_name: sheep-supply-chain-web
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    environment:
+      # Points to the db service inside the Docker network (not localhost)
+      DATABASE_URL: mysql://root:supplychain@db:3306/supply_chain
+      SESSION_SECRET: ${SESSION_SECRET}
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  supply_chain_data:

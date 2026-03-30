@@ -1,10 +1,25 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { RefreshCw, CheckCircle, AlertTriangle, UserPlus, KeyRound, EyeOff, Eye, X, Copy, Check } from "lucide-react";
+import { RefreshCw, CheckCircle, AlertTriangle, UserPlus, KeyRound, EyeOff, Eye, X, Copy, Check, Building2, Plus } from "lucide-react";
 import { createUser, deactivateUser, reactivateUser, resetUserPassword } from "@/lib/actions/users";
+import { createSupplier, deactivateSupplier, reactivateSupplier } from "@/lib/actions/suppliers";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
+
+const SUPPLIER_TYPES = ["GROWER", "SCOURER", "SPINNER", "KNITTER", "FINISHER", "RETAILER", "OTHER"] as const;
+type SupplierType = typeof SUPPLIER_TYPES[number];
+
+type SupplierRow = {
+  id: number;
+  name: string;
+  type: SupplierType;
+  country: string | null;
+  contactName: string | null;
+  contactEmail: string | null;
+  isActive: boolean;
+  _count: { users: number };
+};
 
 type SupplierInfo = { id: number; name: string; type: string };
 
@@ -23,7 +38,7 @@ interface SettingsClientProps {
   isAdmin: boolean;
   currentUserId: number;
   users: UserRow[];
-  suppliers: SupplierInfo[];
+  suppliers: SupplierRow[];
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -34,6 +49,16 @@ const ROLE_BADGE: Record<string, string> = {
   VIEWER: "bg-badge-yellow-bg text-badge-yellow-text",
 };
 
+const TYPE_LABEL: Record<SupplierType, string> = {
+  GROWER: "Grower",
+  SCOURER: "Scourer",
+  SPINNER: "Spinner",
+  KNITTER: "Knitter",
+  FINISHER: "Finisher",
+  RETAILER: "Retailer",
+  OTHER: "Other",
+};
+
 function RoleBadge({ role }: { role: string }) {
   return (
     <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${ROLE_BADGE[role] ?? "bg-secondary text-foreground"}`}>
@@ -42,12 +67,259 @@ function RoleBadge({ role }: { role: string }) {
   );
 }
 
+function TypeBadge({ type }: { type: string }) {
+  return (
+    <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-secondary text-muted-foreground">
+      {TYPE_LABEL[type as SupplierType] ?? type}
+    </span>
+  );
+}
+
+// ─── Add Supplier Form ────────────────────────────────────────────────────────
+
+interface AddSupplierFormProps {
+  onSuccess: (supplier: SupplierRow) => void;
+  onCancel: () => void;
+}
+
+function AddSupplierForm({ onSuccess, onCancel }: AddSupplierFormProps) {
+  const [isPending, startTransition] = useTransition();
+  const [name, setName] = useState("");
+  const [type, setType] = useState<SupplierType>("KNITTER");
+  const [country, setCountry] = useState("");
+  const [contactName, setContactName] = useState("");
+  const [contactEmail, setContactEmail] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    startTransition(async () => {
+      const result = await createSupplier({
+        name: name.trim(),
+        type,
+        country: country.trim() || null,
+        contactName: contactName.trim() || null,
+        contactEmail: contactEmail.trim() || null,
+      });
+      if (result.success && result.data) {
+        onSuccess({
+          ...(result.data as unknown as SupplierRow),
+          _count: { users: 0 },
+        });
+      } else {
+        setError(result.error ?? "Failed to create supplier");
+      }
+    });
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="mt-3 p-4 rounded-xl border border-border bg-background space-y-3">
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-[10px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1">Supplier Name *</label>
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g. Italia Knits"
+            required
+            className="w-full px-3 py-2 bg-card border border-border rounded-lg text-[12px] text-foreground outline-none focus:ring-1 focus:ring-ring"
+          />
+        </div>
+        <div>
+          <label className="block text-[10px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1">Type *</label>
+          <select
+            value={type}
+            onChange={(e) => setType(e.target.value as SupplierType)}
+            className="w-full px-3 py-2 bg-card border border-border rounded-lg text-[12px] text-foreground outline-none focus:ring-1 focus:ring-ring"
+          >
+            {SUPPLIER_TYPES.map((t) => (
+              <option key={t} value={t}>{TYPE_LABEL[t]}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        <div>
+          <label className="block text-[10px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1">Country</label>
+          <input
+            value={country}
+            onChange={(e) => setCountry(e.target.value)}
+            placeholder="e.g. Italy"
+            className="w-full px-3 py-2 bg-card border border-border rounded-lg text-[12px] text-foreground outline-none focus:ring-1 focus:ring-ring"
+          />
+        </div>
+        <div>
+          <label className="block text-[10px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1">Contact Name</label>
+          <input
+            value={contactName}
+            onChange={(e) => setContactName(e.target.value)}
+            placeholder="e.g. Marco Rossi"
+            className="w-full px-3 py-2 bg-card border border-border rounded-lg text-[12px] text-foreground outline-none focus:ring-1 focus:ring-ring"
+          />
+        </div>
+        <div>
+          <label className="block text-[10px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1">Contact Email</label>
+          <input
+            type="email"
+            value={contactEmail}
+            onChange={(e) => setContactEmail(e.target.value)}
+            placeholder="marco@example.com"
+            className="w-full px-3 py-2 bg-card border border-border rounded-lg text-[12px] text-foreground outline-none focus:ring-1 focus:ring-ring"
+          />
+        </div>
+      </div>
+
+      {error && (
+        <p className="text-[11px] text-badge-red-text flex items-center gap-1.5">
+          <AlertTriangle size={13} />
+          {error}
+        </p>
+      )}
+
+      <div className="flex items-center gap-2 pt-1">
+        <button
+          type="submit"
+          disabled={isPending}
+          className="px-4 py-2 rounded-lg bg-foreground text-background text-[11px] font-semibold uppercase tracking-wider hover:bg-foreground/90 disabled:opacity-50 transition-colors"
+        >
+          {isPending ? "Creating…" : "Add Supplier"}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="px-4 py-2 rounded-lg text-[11px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
+        >
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
+
+// ─── Supplier Row ─────────────────────────────────────────────────────────────
+
+function SupplierRowComponent({ supplier }: { supplier: SupplierRow }) {
+  const [isPending, startTransition] = useTransition();
+
+  function handleDeactivate() {
+    startTransition(async () => { await deactivateSupplier(supplier.id); });
+  }
+
+  function handleReactivate() {
+    startTransition(async () => { await reactivateSupplier(supplier.id); });
+  }
+
+  return (
+    <div className={`flex items-center gap-3 py-2.5 px-3 rounded-lg transition-colors ${!supplier.isActive ? "opacity-50" : "hover:bg-secondary/30"}`}>
+      {/* Icon */}
+      <div className="w-7 h-7 rounded-full bg-secondary flex items-center justify-center shrink-0">
+        <Building2 size={13} className="text-muted-foreground" />
+      </div>
+
+      {/* Name + meta */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-[12px] font-semibold text-foreground truncate">{supplier.name}</span>
+          {!supplier.isActive && (
+            <span className="text-[9px] font-bold uppercase tracking-wider text-badge-red-text bg-badge-red-bg px-1.5 py-0.5 rounded">Inactive</span>
+          )}
+        </div>
+        <p className="text-[10px] text-muted-foreground font-mono-brand">
+          {[supplier.country, supplier.contactName, supplier.contactEmail].filter(Boolean).join(" · ") || "No contact info"}
+          {" · "}
+          <span className="text-muted-foreground/60">{supplier._count.users} {supplier._count.users === 1 ? "user" : "users"}</span>
+        </p>
+      </div>
+
+      <TypeBadge type={supplier.type} />
+
+      {/* Actions */}
+      <div className="flex items-center gap-1 shrink-0">
+        {supplier.isActive ? (
+          <button
+            onClick={handleDeactivate}
+            disabled={isPending}
+            title="Deactivate supplier"
+            className="px-2 py-1 rounded-lg text-muted-foreground hover:text-badge-red-text hover:bg-badge-red-bg/30 disabled:opacity-30 transition-colors text-[10px] font-semibold uppercase tracking-wider"
+          >
+            Deactivate
+          </button>
+        ) : (
+          <button
+            onClick={handleReactivate}
+            disabled={isPending}
+            title="Reactivate supplier"
+            className="px-2 py-1 rounded-lg text-muted-foreground hover:text-badge-green-text hover:bg-badge-green-bg/30 disabled:opacity-30 transition-colors text-[10px] font-semibold uppercase tracking-wider"
+          >
+            Reactivate
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Suppliers Section ────────────────────────────────────────────────────────
+
+function SuppliersSection({ suppliers }: { suppliers: SupplierRow[] }) {
+  const [showForm, setShowForm] = useState(false);
+  const [localSuppliers, setLocalSuppliers] = useState(suppliers);
+
+  function handleAddSuccess(supplier: SupplierRow) {
+    setLocalSuppliers((prev) => [...prev, supplier].sort((a, b) => a.name.localeCompare(b.name)));
+    setShowForm(false);
+  }
+
+  const activeCount = localSuppliers.filter((s) => s.isActive).length;
+
+  return (
+    <div className="bg-card border border-border rounded-xl p-6">
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <h3 className="text-[12px] font-bold uppercase tracking-wider text-foreground">Suppliers</h3>
+          <p className="text-[11px] text-muted-foreground mt-0.5">
+            {activeCount} active supplier{activeCount !== 1 ? "s" : ""} — add a supplier before creating supplier user accounts.
+          </p>
+        </div>
+        <button
+          onClick={() => setShowForm(true)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-foreground text-background text-[11px] font-semibold uppercase tracking-wider hover:bg-foreground/90 transition-colors"
+        >
+          <Plus size={13} />
+          Add Supplier
+        </button>
+      </div>
+
+      {showForm && (
+        <AddSupplierForm
+          onSuccess={handleAddSuccess}
+          onCancel={() => setShowForm(false)}
+        />
+      )}
+
+      <div className="rounded-xl border border-border overflow-hidden mt-3">
+        {localSuppliers.length === 0 ? (
+          <p className="text-[11px] text-muted-foreground px-3 py-4">
+            No suppliers yet — add one to get started.
+          </p>
+        ) : (
+          localSuppliers.map((s) => (
+            <SupplierRowComponent key={s.id} supplier={s} />
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Add User Form ────────────────────────────────────────────────────────────
 
 interface AddUserFormProps {
   defaultRole: "ADMIN" | "SUPPLIER";
   defaultSupplierId?: number;
-  suppliers: SupplierInfo[];
+  suppliers: SupplierRow[];
   onSuccess: (result: { user: UserRow; tempPassword: string }) => void;
   onCancel: () => void;
 }
@@ -59,6 +331,8 @@ function AddUserForm({ defaultRole, defaultSupplierId, suppliers, onSuccess, onC
   const [role, setRole] = useState<"ADMIN" | "SUPPLIER" | "VIEWER">(defaultRole);
   const [supplierId, setSupplierId] = useState<number | null>(defaultSupplierId ?? null);
   const [error, setError] = useState<string | null>(null);
+
+  const activeSuppliers = suppliers.filter((s) => s.isActive);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -127,10 +401,13 @@ function AddUserForm({ defaultRole, defaultSupplierId, suppliers, onSuccess, onC
               className="w-full px-3 py-2 bg-card border border-border rounded-lg text-[12px] text-foreground outline-none focus:ring-1 focus:ring-ring"
             >
               <option value="">Select supplier…</option>
-              {suppliers.map((s) => (
+              {activeSuppliers.map((s) => (
                 <option key={s.id} value={s.id}>{s.name}</option>
               ))}
             </select>
+            {activeSuppliers.length === 0 && (
+              <p className="text-[10px] text-badge-red-text mt-1">No active suppliers — add one in the Suppliers section above.</p>
+            )}
           </div>
         )}
       </div>
@@ -225,15 +502,11 @@ function UserRowComponent({ user, currentUserId, onPasswordReset }: UserRowCompo
   const isSelf = user.id === currentUserId;
 
   function handleDeactivate() {
-    startTransition(async () => {
-      await deactivateUser(user.id, currentUserId);
-    });
+    startTransition(async () => { await deactivateUser(user.id, currentUserId); });
   }
 
   function handleReactivate() {
-    startTransition(async () => {
-      await reactivateUser(user.id);
-    });
+    startTransition(async () => { await reactivateUser(user.id); });
   }
 
   function handleResetPassword() {
@@ -247,12 +520,10 @@ function UserRowComponent({ user, currentUserId, onPasswordReset }: UserRowCompo
 
   return (
     <div className={`flex items-center gap-3 py-2.5 px-3 rounded-lg transition-colors ${!user.isActive ? "opacity-50" : "hover:bg-secondary/30"}`}>
-      {/* Avatar initial */}
       <div className="w-7 h-7 rounded-full bg-secondary flex items-center justify-center shrink-0">
         <span className="text-[11px] font-bold text-foreground uppercase">{user.name.charAt(0)}</span>
       </div>
 
-      {/* Name + email */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-[12px] font-semibold text-foreground truncate">{user.name}</span>
@@ -264,7 +535,6 @@ function UserRowComponent({ user, currentUserId, onPasswordReset }: UserRowCompo
 
       <RoleBadge role={user.role} />
 
-      {/* Actions */}
       <div className="flex items-center gap-1 shrink-0">
         <button
           onClick={handleResetPassword}
@@ -303,12 +573,11 @@ function UserRowComponent({ user, currentUserId, onPasswordReset }: UserRowCompo
 
 // ─── Team Section ─────────────────────────────────────────────────────────────
 
-function TeamSection({ users, suppliers, currentUserId }: { users: UserRow[]; suppliers: SupplierInfo[]; currentUserId: number }) {
+function TeamSection({ users, suppliers, currentUserId }: { users: UserRow[]; suppliers: SupplierRow[]; currentUserId: number }) {
   const [addForm, setAddForm] = useState<{ role: "ADMIN" | "SUPPLIER"; supplierId?: number } | null>(null);
   const [tempPasswordBanner, setTempPasswordBanner] = useState<{ name: string; tempPassword: string } | null>(null);
   const [resetBanners, setResetBanners] = useState<Record<number, { name: string; tempPassword: string }>>({});
 
-  // Group users
   const adminUsers = users.filter((u) => u.role === "ADMIN");
   const supplierGroups = suppliers.map((s) => ({
     supplier: s,
@@ -345,7 +614,6 @@ function TeamSection({ users, suppliers, currentUserId }: { users: UserRow[]; su
         </button>
       </div>
 
-      {/* Global creation banner */}
       {tempPasswordBanner && (
         <TempPasswordBanner
           name={tempPasswordBanner.name}
@@ -354,7 +622,6 @@ function TeamSection({ users, suppliers, currentUserId }: { users: UserRow[]; su
         />
       )}
 
-      {/* Global add form (when triggered from header — no pre-selected supplier) */}
       {addForm && addForm.supplierId === undefined && (
         <AddUserForm
           defaultRole={addForm.role}
@@ -385,23 +652,13 @@ function TeamSection({ users, suppliers, currentUserId }: { users: UserRow[]; su
             ) : (
               adminUsers.map((user) => (
                 <div key={user.id}>
-                  <UserRowComponent
-                    user={user}
-                    currentUserId={currentUserId}
-                    onPasswordReset={handleResetDone}
-                  />
+                  <UserRowComponent user={user} currentUserId={currentUserId} onPasswordReset={handleResetDone} />
                   {resetBanners[user.id] && (
                     <div className="px-3 pb-2">
                       <TempPasswordBanner
                         name={resetBanners[user.id].name}
                         tempPassword={resetBanners[user.id].tempPassword}
-                        onDismiss={() =>
-                          setResetBanners((prev) => {
-                            const n = { ...prev };
-                            delete n[user.id];
-                            return n;
-                          })
-                        }
+                        onDismiss={() => setResetBanners((prev) => { const n = { ...prev }; delete n[user.id]; return n; })}
                       />
                     </div>
                   )}
@@ -419,21 +676,20 @@ function TeamSection({ users, suppliers, currentUserId }: { users: UserRow[]; su
                 <p className="text-[10px] font-mono-brand uppercase tracking-widest text-muted-foreground">
                   {supplier.name}
                 </p>
-                <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/60 bg-secondary px-1.5 py-0.5 rounded">
-                  {supplier.type}
-                </span>
+                <TypeBadge type={supplier.type} />
                 <span className="text-[10px] text-muted-foreground/60">({groupUsers.length})</span>
               </div>
-              <button
-                onClick={() => setAddForm({ role: "SUPPLIER", supplierId: supplier.id })}
-                className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <UserPlus size={11} />
-                Add User
-              </button>
+              {supplier.isActive && (
+                <button
+                  onClick={() => setAddForm({ role: "SUPPLIER", supplierId: supplier.id })}
+                  className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <UserPlus size={11} />
+                  Add User
+                </button>
+              )}
             </div>
 
-            {/* Inline add form for this supplier */}
             {addForm?.supplierId === supplier.id && (
               <AddUserForm
                 defaultRole="SUPPLIER"
@@ -452,23 +708,13 @@ function TeamSection({ users, suppliers, currentUserId }: { users: UserRow[]; su
               ) : (
                 groupUsers.map((user) => (
                   <div key={user.id}>
-                    <UserRowComponent
-                      user={user}
-                      currentUserId={currentUserId}
-                      onPasswordReset={handleResetDone}
-                    />
+                    <UserRowComponent user={user} currentUserId={currentUserId} onPasswordReset={handleResetDone} />
                     {resetBanners[user.id] && (
                       <div className="px-3 pb-2">
                         <TempPasswordBanner
                           name={resetBanners[user.id].name}
                           tempPassword={resetBanners[user.id].tempPassword}
-                          onDismiss={() =>
-                            setResetBanners((prev) => {
-                              const n = { ...prev };
-                              delete n[user.id];
-                              return n;
-                            })
-                          }
+                          onDismiss={() => setResetBanners((prev) => { const n = { ...prev }; delete n[user.id]; return n; })}
                         />
                       </div>
                     )}
@@ -479,7 +725,7 @@ function TeamSection({ users, suppliers, currentUserId }: { users: UserRow[]; su
           </div>
         ))}
 
-        {/* ── Unassigned supplier users (shouldn't normally happen, but handle it) ── */}
+        {/* ── Unassigned ── */}
         {unassignedSupplierUsers.length > 0 && (
           <div>
             <p className="text-[10px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-2">
@@ -487,12 +733,7 @@ function TeamSection({ users, suppliers, currentUserId }: { users: UserRow[]; su
             </p>
             <div className="rounded-xl border border-border overflow-hidden">
               {unassignedSupplierUsers.map((user) => (
-                <UserRowComponent
-                  key={user.id}
-                  user={user}
-                  currentUserId={currentUserId}
-                  onPasswordReset={handleResetDone}
-                />
+                <UserRowComponent key={user.id} user={user} currentUserId={currentUserId} onPasswordReset={handleResetDone} />
               ))}
             </div>
           </div>
@@ -554,6 +795,9 @@ export function SettingsClient({ isAdmin, currentUserId, users, suppliers }: Set
       </div>
 
       <div className="space-y-6">
+        {/* ── Suppliers (admin only) ── */}
+        {isAdmin && <SuppliersSection suppliers={suppliers} />}
+
         {/* ── Team (admin only) ── */}
         {isAdmin && (
           <TeamSection

@@ -13,9 +13,17 @@ export default async function SettingsPage() {
           orderBy: [{ role: "asc" }, { name: "asc" }],
         }),
         prisma.supplier.findMany({
-          where: { isActive: true },
           orderBy: { name: "asc" },
-          select: { id: true, name: true, type: true },
+          select: {
+            id: true,
+            name: true,
+            type: true,
+            country: true,
+            contactName: true,
+            contactEmail: true,
+            isActive: true,
+            _count: { select: { users: true } },
+          },
         }),
       ])
     : [[], []];
@@ -25,7 +33,7 @@ export default async function SettingsPage() {
       isAdmin={isAdmin}
       currentUserId={session.userId}
       users={JSON.parse(JSON.stringify(users))}
-      suppliers={suppliers}
+      suppliers={JSON.parse(JSON.stringify(suppliers))}
     />
   );
 }

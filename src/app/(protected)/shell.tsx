@@ -2,10 +2,10 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { Menu, X, Settings, LogOut, Disc } from "lucide-react";
+import { usePathname } from "next/navigation";
+import { Menu, X, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { getSectionsForRole, type HubSection } from "@/lib/sections";
+import { getSectionsForRole } from "@/lib/sections";
 
 interface ShellProps {
   user: { id: number; email: string; name: string; role: string; supplierId?: number | null; supplierName?: string | null };
@@ -14,7 +14,6 @@ interface ShellProps {
 
 export function Shell({ user, children }: ShellProps) {
   const pathname = usePathname();
-  const router = useRouter();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const allSections = getSectionsForRole(user.role);
@@ -22,14 +21,20 @@ export function Shell({ user, children }: ShellProps) {
   const sections = allSections.filter((s) => s.id !== "new-run" && s.id !== "new-order");
 
   // Determine active section from pathname
-  const activeSection = sections.find((s) =>
-    pathname.startsWith(s.routePrefix)
-  ) ?? sections[0];
+  const isSettingsRoute = pathname.startsWith("/settings");
+  const activeSection = isSettingsRoute
+    ? null
+    : (sections.find((s) => pathname.startsWith(s.routePrefix)) ?? sections[0]);
 
   // Active tab within section
-  const activeTabSlug = activeSection.tabs.length > 1
+  const activeTabSlug = activeSection && activeSection.tabs.length > 1
     ? activeSection.tabs.find((t) => pathname.includes(t.slug))?.slug ?? activeSection.tabs[0].slug
-    : activeSection.tabs[0].slug;
+    : activeSection?.tabs[0].slug ?? "";
+
+  // User initials for avatar button
+  const initials = user.name
+    ? user.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
+    : "U";
 
   async function handleSignOut() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -38,30 +43,31 @@ export function Shell({ user, children }: ShellProps) {
 
   return (
     <div className="h-screen flex flex-col md:flex-row overflow-hidden bg-background">
-      {/* ── Desktop Sidebar (icon + label rail) ── */}
-      <div className="hidden md:flex flex-col w-[160px] bg-card border-r border-border shrink-0">
-        {/* Logo / Home */}
+      {/* ── Desktop Sidebar (narrow strip — matches hub) ── */}
+      <div className="hidden md:flex flex-col w-14 bg-card border-r border-border shrink-0">
+        {/* Circle / Home */}
         <Link
           href="/dashboard"
-          className="flex items-center gap-2.5 h-14 px-4 border-b border-border hover:bg-secondary/50 transition-colors"
+          className="h-14 flex items-center justify-center border-b border-border hover:bg-secondary/50 transition-colors shrink-0"
           title="Home"
         >
-          <Disc size={18} className="text-foreground shrink-0" />
-          <span className="text-[11px] font-bold uppercase tracking-wider text-foreground">The Loom</span>
+          <div className="w-7 h-7 rounded-full border-2 border-primary flex items-center justify-center">
+            <div className="w-2.5 h-2.5 rounded-full bg-primary animate-subtle-pulse" />
+          </div>
         </Link>
 
-        {/* Section links with labels */}
-        <div className="flex-1 flex flex-col py-2 gap-0.5">
+        {/* Section icon links */}
+        <div className="flex-1 flex flex-col items-center py-2 gap-0.5">
           {sections.map((section) => {
             const Icon = section.icon;
-            const isActive = section.id === activeSection.id;
+            const isActive = !isSettingsRoute && section.id === activeSection?.id;
             return (
               <Link
                 key={section.id}
                 href={section.routePrefix}
                 title={section.label}
                 className={cn(
-                  "relative flex items-center gap-2.5 h-10 mx-1.5 px-2.5 rounded-lg transition-all",
+                  "relative w-9 h-9 flex items-center justify-center rounded-lg transition-all",
                   isActive
                     ? "bg-secondary text-foreground"
                     : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
@@ -69,34 +75,41 @@ export function Shell({ user, children }: ShellProps) {
               >
                 {isActive && (
                   <div
-                    className="absolute left-0 top-1 bottom-1 w-[3px] rounded-r-full"
+                    className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r-full"
                     style={{ backgroundColor: section.color }}
                   />
                 )}
-                <Icon size={16} className="shrink-0" />
-                <span className="text-[11px] font-semibold uppercase tracking-wider truncate">{section.label}</span>
+                <Icon
+                  size={16}
+                  strokeWidth={isActive ? 2 : 1.5}
+                  style={isActive ? { color: section.color } : undefined}
+                />
               </Link>
             );
           })}
         </div>
 
-        {/* Settings + user */}
-        <div className="flex flex-col py-3 gap-1 border-t border-border px-1.5">
+        {/* Bottom: settings + user initials */}
+        <div className="p-3 flex flex-col items-center gap-2 border-t border-border">
           <Link
             href="/settings"
-            className="flex items-center gap-2.5 h-9 px-2.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
+            className={cn(
+              "w-8 h-8 rounded-lg flex items-center justify-center transition-colors",
+              isSettingsRoute
+                ? "bg-secondary text-foreground"
+                : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+            )}
             title="Settings"
           >
-            <Settings size={15} className="shrink-0" />
-            <span className="text-[10px] font-medium uppercase tracking-wider">Settings</span>
+            <Settings size={15} />
           </Link>
+          <div className="w-6 h-px bg-border" />
           <button
             onClick={handleSignOut}
-            className="flex items-center gap-2.5 h-9 px-2.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors text-left"
-            title="Sign out"
+            className="w-8 h-8 rounded-full bg-foreground flex items-center justify-center text-background text-[10px] font-bold cursor-pointer hover:opacity-80 transition-opacity"
+            title={`${user.name} — Sign out`}
           >
-            <LogOut size={15} className="shrink-0" />
-            <span className="text-[10px] font-medium uppercase tracking-wider">Sign out</span>
+            {initials}
           </button>
         </div>
       </div>
@@ -114,13 +127,15 @@ export function Shell({ user, children }: ShellProps) {
           <div className="flex-1 flex items-center justify-center">
             <span
               className="text-[11px] font-bold uppercase tracking-[0.15em]"
-              style={{ color: activeSection.color }}
+              style={{ color: isSettingsRoute ? undefined : activeSection?.color }}
             >
-              {activeSection.label}
+              {isSettingsRoute ? "Settings." : activeSection?.label}
             </span>
           </div>
-          <Link href="/dashboard" className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground">
-            <Disc size={18} />
+          <Link href="/dashboard" className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground" title="Home">
+            <div className="w-5 h-5 rounded-full border-2 border-primary flex items-center justify-center">
+              <div className="w-1.5 h-1.5 rounded-full bg-primary" />
+            </div>
           </Link>
         </div>
 
@@ -129,18 +144,18 @@ export function Shell({ user, children }: ShellProps) {
           <div className="flex items-center gap-3">
             <div
               className="w-2 h-2 rounded-full animate-subtle-pulse"
-              style={{ backgroundColor: activeSection.color }}
+              style={{ backgroundColor: isSettingsRoute ? "hsl(var(--muted-foreground))" : activeSection?.color }}
             />
             <span
               className="text-[13px] font-bold uppercase tracking-[0.15em]"
-              style={{ color: activeSection.color }}
+              style={{ color: isSettingsRoute ? undefined : activeSection?.color }}
             >
-              {activeSection.label}
+              {isSettingsRoute ? "Settings." : activeSection?.label}
             </span>
           </div>
 
-          {/* Tab bar */}
-          {activeSection.tabs.length > 1 && (
+          {/* Tab bar — hidden on settings */}
+          {!isSettingsRoute && activeSection && activeSection.tabs.length > 1 && (
             <div className="ml-10 flex gap-0">
               {activeSection.tabs.map((tab) => {
                 const tabHref = `${activeSection.routePrefix}${tab.slug === activeSection.tabs[0].slug ? "" : `/${tab.slug}`}`;
@@ -179,7 +194,7 @@ export function Shell({ user, children }: ShellProps) {
         </div>
 
         {/* ── Tab bar (mobile) ── */}
-        {activeSection.tabs.length > 1 && (
+        {!isSettingsRoute && activeSection && activeSection.tabs.length > 1 && (
           <div className="md:hidden flex border-b border-border bg-card overflow-x-auto scrollbar-none shrink-0">
             {activeSection.tabs.map((tab) => {
               const tabHref = `${activeSection.routePrefix}${tab.slug === activeSection.tabs[0].slug ? "" : `/${tab.slug}`}`;
@@ -233,7 +248,7 @@ export function Shell({ user, children }: ShellProps) {
               </p>
               {sections.map((section) => {
                 const Icon = section.icon;
-                const isActive = section.id === activeSection.id;
+                const isActive = !isSettingsRoute && section.id === activeSection?.id;
                 return (
                   <Link
                     key={section.id}

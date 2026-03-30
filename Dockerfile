@@ -25,11 +25,11 @@ COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
 
-# Prisma CLI + client + migrations (needed to run `prisma migrate deploy` at startup)
+# Prisma schema + migrations
 COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/node_modules/.bin/prisma* ./node_modules/.bin/
-COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
-COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+
+# Install prisma CLI globally so it has all its WASM files in the right place
+RUN npm install -g prisma
 
 COPY docker-entrypoint.sh ./
 RUN chmod +x docker-entrypoint.sh

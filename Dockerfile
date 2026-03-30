@@ -29,7 +29,7 @@ COPY --from=builder /app/public ./public
 COPY --from=builder /app/prisma ./prisma
 
 # Install prisma CLI globally so it has all its WASM files in the right place
-RUN npm install -g prisma
+RUN npm install -g prisma@6
 
 COPY docker-entrypoint.sh ./
 RUN chmod +x docker-entrypoint.sh

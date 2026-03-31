@@ -297,7 +297,10 @@ export function HubView({ user, stats }: HubViewProps) {
             const size = absOffset === 0 ? 96 : absOffset === 1 ? 74 : 56;
             const innerSize = size * 0.46;
             const iconSize = absOffset === 0 ? 26 : absOffset === 1 ? 18 : 14;
-            const spacing = 60;
+            // spacing1 = center↔±1, spacing2 = ±1↔±2
+            const spacing1 = 68; // less overlap with center (purple/green)
+            const spacing2 = 52; // more overlap with ±1 (orange/teal)
+            const pos = offset === 0 ? 0 : Math.sign(offset) * (spacing1 + (Math.abs(offset) - 1) * spacing2);
             const ease = "cubic-bezier(0.4,0,0.2,1)";
             const transition = `left 320ms ${ease}, width 320ms ${ease}, height 320ms ${ease}, margin-top 320ms ${ease}, box-shadow 320ms ease`;
 
@@ -309,7 +312,7 @@ export function HubView({ user, stats }: HubViewProps) {
                 style={{
                   width: size,
                   height: size,
-                  left: `calc(50% + ${offset * spacing}px - ${size / 2}px)`,
+                  left: `calc(50% + ${pos}px - ${size / 2}px)`,
                   top: "50%",
                   marginTop: -size / 2,
                   transition,

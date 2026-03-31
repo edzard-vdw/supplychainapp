@@ -287,51 +287,36 @@ export function HubView({ user, stats }: HubViewProps) {
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
       >
-        {/* Carousel of circles — flex row, evenly distributed */}
-        <div className="flex items-center w-full" style={{ height: 140 }}>
+        {/* Overlapping circle row */}
+        <div className="flex items-center justify-center" style={{ height: 140 }}>
           {sections.map((section, i) => {
             const Icon = section.icon;
-            const absOffset = Math.abs(i - activeIndex);
-            const scale = absOffset === 0 ? 1 : absOffset === 1 ? 0.62 : 0.44;
-            const opacity = absOffset === 0 ? 1 : absOffset === 1 ? 0.6 : 0.3;
-            const isActive = absOffset === 0;
+            const isActive = i === activeIndex;
+            const size = isActive ? 80 : 54;
+            const iconSize = isActive ? 28 : 18;
 
             return (
               <button
                 key={section.id}
-                className="outline-none flex items-center justify-center flex-1"
+                onClick={() => isActive ? router.push(section.routePrefix) : setActiveIndex(i)}
+                className="outline-none relative flex items-center justify-center rounded-full bg-card border-2 transition-all duration-300"
                 style={{
-                  transform: `scale(${scale})`,
-                  opacity,
-                  transition: "all 0.35s cubic-bezier(0.4, 0, 0.2, 1)",
-                }}
-                onClick={() => {
-                  if (isActive) {
-                    router.push(section.routePrefix);
-                  } else {
-                    setActiveIndex(i);
-                  }
+                  width: size,
+                  height: size,
+                  borderColor: section.color,
+                  boxShadow: isActive ? `0 0 24px ${section.glowColor}` : "none",
+                  marginLeft: i === 0 ? 0 : -10,
+                  zIndex: isActive ? 10 : 5 - Math.abs(i - activeIndex),
+                  opacity: isActive ? 1 : 0.65,
                 }}
               >
-                <div
-                  className="relative w-24 h-24 rounded-full border-2 flex items-center justify-center bg-card"
-                  style={{
-                    borderColor: section.color,
-                    boxShadow: isActive ? `0 0 20px ${section.glowColor}` : "none",
-                  }}
-                >
-                  {section.id === "new-run" || section.id === "new-order" ? (
-                    <div className="w-10 h-10 rounded-full flex items-center justify-center shadow-lg" style={{ backgroundColor: section.color }}>
-                      <Plus size={20} className="text-white" strokeWidth={2.5} />
-                    </div>
-                  ) : (
-                    <div className="w-10 h-10 rounded-full bg-card border border-border flex items-center justify-center shadow-sm">
-                      <Icon size={18} style={{ color: section.color }} strokeWidth={1.5} />
-                    </div>
-                  )}
-                  <div className="absolute inset-1 rounded-full border opacity-15" style={{ borderColor: section.color }} />
-                  <div className="absolute inset-2.5 rounded-full border opacity-[0.08]" style={{ borderColor: section.color }} />
-                </div>
+                {section.id === "new-run" || section.id === "new-order" ? (
+                  <div className="rounded-full flex items-center justify-center" style={{ width: size * 0.5, height: size * 0.5, backgroundColor: section.color }}>
+                    <Plus size={iconSize * 0.75} className="text-white" strokeWidth={2.5} />
+                  </div>
+                ) : (
+                  <Icon size={iconSize} style={{ color: section.color }} strokeWidth={1.5} />
+                )}
               </button>
             );
           })}

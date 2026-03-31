@@ -297,9 +297,10 @@ export function HubView({ user, stats }: HubViewProps) {
             const size = absOffset === 0 ? 96 : absOffset === 1 ? 74 : 56;
             const innerSize = size * 0.46;
             const iconSize = absOffset === 0 ? 26 : absOffset === 1 ? 18 : 14;
-            const spacing = 76;
+            const spacing = 68;
+            const isVisible = absOffset <= 2;
             const ease = "cubic-bezier(0.4,0,0.2,1)";
-            const transition = `left 320ms ${ease}, width 320ms ${ease}, height 320ms ${ease}, margin-top 320ms ${ease}, box-shadow 320ms ease`;
+            const transition = `left 320ms ${ease}, width 320ms ${ease}, height 320ms ${ease}, margin-top 320ms ${ease}, opacity 200ms ease, box-shadow 320ms ease`;
 
             return (
               <button
@@ -313,6 +314,8 @@ export function HubView({ user, stats }: HubViewProps) {
                   top: "50%",
                   marginTop: -size / 2,
                   transition,
+                  opacity: isVisible ? 1 : 0,
+                  pointerEvents: isVisible ? "auto" : "none",
                   borderColor: section.color,
                   boxShadow: isActive
                     ? `0 0 28px ${section.glowColor}, 0 0 52px ${section.glowColor}`

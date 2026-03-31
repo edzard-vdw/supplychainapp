@@ -352,10 +352,10 @@ export function HubView({ user, stats }: HubViewProps) {
             transition={{ duration: 0.2 }}
             className="text-center mt-6"
           >
-            <p className="text-lg font-bold uppercase tracking-[0.12em] text-foreground">
+            <p className="text-[15px] font-bold uppercase tracking-[0.15em] text-foreground">
               {activeSection.label}
             </p>
-            <p className="text-[11px] text-muted-foreground mt-1">
+            <p className="text-[12px] text-muted-foreground mt-1">
               {activeSection.description}
             </p>
           </motion.div>

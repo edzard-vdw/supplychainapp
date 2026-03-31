@@ -288,7 +288,7 @@ export function HubView({ user, stats }: HubViewProps) {
         onTouchEnd={handleTouchEnd}
       >
         {/* Carousel of circles — flex row, evenly distributed */}
-        <div className="flex items-center justify-around w-full px-2" style={{ height: 140 }}>
+        <div className="flex items-center w-full" style={{ height: 140 }}>
           {sections.map((section, i) => {
             const Icon = section.icon;
             const absOffset = Math.abs(i - activeIndex);
@@ -299,13 +299,11 @@ export function HubView({ user, stats }: HubViewProps) {
             return (
               <button
                 key={section.id}
-                className="outline-none flex items-center justify-center shrink-0"
+                className="outline-none flex items-center justify-center flex-1"
                 style={{
                   transform: `scale(${scale})`,
                   opacity,
                   transition: "all 0.35s cubic-bezier(0.4, 0, 0.2, 1)",
-                  width: 96,
-                  height: 96,
                 }}
                 onClick={() => {
                   if (isActive) {

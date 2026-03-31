@@ -28,6 +28,11 @@ COPY --from=builder /app/public ./public
 # Prisma schema + migrations
 COPY --from=builder /app/prisma ./prisma
 
+# PDF extraction script + its dependencies (not bundled by Next.js standalone)
+COPY --from=builder /app/scripts ./scripts
+COPY --from=deps /app/node_modules/pdfjs-dist ./node_modules/pdfjs-dist
+COPY --from=deps /app/node_modules/pdf-parse ./node_modules/pdf-parse
+
 # Install prisma CLI globally so it has all its WASM files in the right place
 RUN npm install -g prisma@6
 

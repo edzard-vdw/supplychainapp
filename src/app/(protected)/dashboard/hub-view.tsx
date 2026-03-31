@@ -189,9 +189,11 @@ export function HubView({ user, stats }: HubViewProps) {
         </button>
         <span className="text-xs font-bold text-muted-foreground uppercase tracking-[0.3em] font-mono-brand md:hidden">The Loom</span>
         <span className="text-xs font-bold text-muted-foreground uppercase tracking-[0.3em] font-mono-brand hidden md:inline">Sheep Inc.</span>
-        <button onClick={handleLogout} className="md:hidden w-7 h-7 rounded-full bg-foreground flex items-center justify-center text-background text-[9px] font-bold" title="Sign out">
-          {initials}
-        </button>
+        <Link href="/dashboard" className="md:hidden w-8 h-8 flex items-center justify-center" title="Home">
+          <div className="w-6 h-6 rounded-full border-2 border-primary flex items-center justify-center">
+            <div className="w-2 h-2 rounded-full bg-primary animate-subtle-pulse" />
+          </div>
+        </Link>
         <div className="hidden md:block w-9" />
       </div>
 

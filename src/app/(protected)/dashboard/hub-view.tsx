@@ -287,52 +287,50 @@ export function HubView({ user, stats }: HubViewProps) {
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
       >
-        {/* Conveyor belt circles */}
-        <div className="flex items-center justify-center" style={{ height: 140 }}>
+        {/* Conveyor belt — active always centred, absolute layout */}
+        <div className="relative w-full overflow-hidden" style={{ height: 120 }}>
           {sections.map((section, i) => {
             const Icon = section.icon;
-            const absOffset = Math.abs(i - activeIndex);
+            const offset = i - activeIndex;
+            const absOffset = Math.abs(offset);
             const isActive = absOffset === 0;
-            const size = absOffset === 0 ? 96 : absOffset === 1 ? 72 : 56;
+            const size = absOffset === 0 ? 96 : absOffset === 1 ? 74 : 56;
             const innerSize = size * 0.46;
             const iconSize = absOffset === 0 ? 26 : absOffset === 1 ? 18 : 14;
+            const spacing = 72;
+            // x formula keeps every circle's visual centre at offset * spacing from container centre
+            const x = offset * spacing + (48 - size / 2);
 
             return (
               <motion.button
                 key={section.id}
-                animate={{ width: size, height: size }}
-                transition={{ type: "spring", stiffness: 350, damping: 30 }}
+                animate={{ x, width: size, height: size }}
+                transition={{ type: "spring", stiffness: 360, damping: 32 }}
                 onClick={() => isActive ? router.push(section.routePrefix) : setActiveIndex(i)}
-                className="outline-none relative flex items-center justify-center rounded-full bg-card border-2 shrink-0"
+                className="outline-none absolute flex items-center justify-center rounded-full bg-card border-2"
                 style={{
+                  top: "50%",
+                  left: "calc(50% - 48px)",
+                  marginTop: -48,
                   borderColor: section.color,
                   boxShadow: isActive
                     ? `0 0 28px ${section.glowColor}, 0 0 56px ${section.glowColor}`
                     : "0 2px 8px rgba(0,0,0,0.06)",
-                  marginLeft: i === 0 ? 0 : -16,
                   zIndex: isActive ? 10 : 5 - absOffset,
                 }}
               >
-                {/* Concentric rings on active */}
                 {isActive && (
                   <>
                     <div className="absolute inset-2 rounded-full border opacity-20" style={{ borderColor: section.color }} />
                     <div className="absolute inset-4 rounded-full border opacity-10" style={{ borderColor: section.color }} />
                   </>
                 )}
-
                 {section.id === "new-run" || section.id === "new-order" ? (
-                  <div
-                    className="rounded-full flex items-center justify-center"
-                    style={{ width: innerSize, height: innerSize, backgroundColor: section.color }}
-                  >
+                  <div className="rounded-full flex items-center justify-center" style={{ width: innerSize, height: innerSize, backgroundColor: section.color }}>
                     <Plus size={iconSize} className="text-white" strokeWidth={2.5} />
                   </div>
                 ) : (
-                  <div
-                    className="rounded-full bg-secondary/50 flex items-center justify-center"
-                    style={{ width: innerSize, height: innerSize }}
-                  >
+                  <div className="rounded-full bg-secondary/50 flex items-center justify-center" style={{ width: innerSize, height: innerSize }}>
                     <Icon size={iconSize} style={{ color: section.color }} strokeWidth={1.5} />
                   </div>
                 )}

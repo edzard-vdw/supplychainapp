@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Menu, X, Zap, Plus } from "lucide-react";
+import { Menu, X, Zap, Plus, Settings } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { getSectionsForRole, QUICK_ACTION } from "@/lib/sections";
 
@@ -144,6 +144,16 @@ export function HubView({ user, stats }: HubViewProps) {
                   );
                 })}
               </nav>
+              <div className="border-t border-border">
+                <Link
+                  href="/settings"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center gap-3 px-6 py-3 text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-all"
+                >
+                  <Settings size={16} strokeWidth={1.5} />
+                  <span className="text-sm font-medium">Settings</span>
+                </Link>
+              </div>
               <div className="p-4 border-t border-border flex items-center gap-3">
                 <div className="w-8 h-8 rounded-full bg-foreground flex items-center justify-center text-background text-[10px] font-bold">{initials}</div>
                 <div className="flex-1 min-w-0">

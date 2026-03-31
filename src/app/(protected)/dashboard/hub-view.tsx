@@ -287,27 +287,25 @@ export function HubView({ user, stats }: HubViewProps) {
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
       >
-        {/* Carousel of circles */}
-        <div className="relative w-full flex items-center justify-center" style={{ height: 140 }}>
+        {/* Carousel of circles — flex row, evenly distributed */}
+        <div className="flex items-center justify-around w-full px-2" style={{ height: 140 }}>
           {sections.map((section, i) => {
             const Icon = section.icon;
-            const offset = i - activeIndex;
-            const absOffset = Math.abs(offset);
-            const scale = absOffset === 0 ? 1 : absOffset === 1 ? 0.6 : 0.4;
-            const translateX = offset * 72;
-            const opacity = absOffset > 2 ? 0 : absOffset === 2 ? 0.3 : absOffset === 1 ? 0.55 : 1;
-            const zIndex = 10 - absOffset;
+            const absOffset = Math.abs(i - activeIndex);
+            const scale = absOffset === 0 ? 1 : absOffset === 1 ? 0.62 : 0.44;
+            const opacity = absOffset === 0 ? 1 : absOffset === 1 ? 0.6 : 0.3;
             const isActive = absOffset === 0;
 
             return (
               <button
                 key={section.id}
-                className="absolute outline-none"
+                className="outline-none flex items-center justify-center shrink-0"
                 style={{
-                  transform: `translateX(${translateX}px) scale(${scale})`,
+                  transform: `scale(${scale})`,
                   opacity,
-                  zIndex,
                   transition: "all 0.35s cubic-bezier(0.4, 0, 0.2, 1)",
+                  width: 96,
+                  height: 96,
                 }}
                 onClick={() => {
                   if (isActive) {
@@ -318,7 +316,7 @@ export function HubView({ user, stats }: HubViewProps) {
                 }}
               >
                 <div
-                  className="w-24 h-24 rounded-full border-2 flex items-center justify-center bg-card"
+                  className="relative w-24 h-24 rounded-full border-2 flex items-center justify-center bg-card"
                   style={{
                     borderColor: section.color,
                     boxShadow: isActive ? `0 0 20px ${section.glowColor}` : "none",

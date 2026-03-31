@@ -146,17 +146,26 @@ export function OrderDetailClient({ order, materials, suppliers, editHistory, us
   }
 
   function handleDeleteLine(lineId: number) {
+    if (!confirm("Remove this order line?")) return;
     startTransition(async () => {
-      await deleteOrderLine(lineId);
-      router.refresh();
+      const result = await deleteOrderLine(lineId);
+      if (result.success) {
+        router.refresh();
+      } else {
+        alert(result.error ?? "Failed to delete line");
+      }
     });
   }
 
   function handleDeleteOrder() {
     if (!confirm("Delete this order and all its lines?")) return;
     startTransition(async () => {
-      await deleteOrder(order.id);
-      router.push("/orders");
+      const result = await deleteOrder(order.id);
+      if (result.success) {
+        router.push("/orders");
+      } else {
+        alert(result.error ?? "Failed to delete order");
+      }
     });
   }
 

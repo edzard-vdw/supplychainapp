@@ -287,29 +287,35 @@ export function HubView({ user, stats }: HubViewProps) {
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
       >
-        {/* Conveyor belt — CSS transitions, flex centred */}
-        <div className="flex items-center justify-center w-full" style={{ height: 130 }}>
+        {/* Conveyor belt — active always screen-centred, cascading size */}
+        <div className="relative w-full" style={{ height: 140 }}>
           {sections.map((section, i) => {
             const Icon = section.icon;
-            const absOffset = Math.abs(i - activeIndex);
+            const offset = i - activeIndex;
+            const absOffset = Math.abs(offset);
             const isActive = absOffset === 0;
             const size = absOffset === 0 ? 96 : absOffset === 1 ? 74 : 56;
             const innerSize = size * 0.46;
             const iconSize = absOffset === 0 ? 26 : absOffset === 1 ? 18 : 14;
+            const spacing = 76;
+            const ease = "cubic-bezier(0.4,0,0.2,1)";
+            const transition = `left 320ms ${ease}, width 320ms ${ease}, height 320ms ${ease}, margin-top 320ms ${ease}, box-shadow 320ms ease`;
 
             return (
               <button
                 key={section.id}
                 onClick={() => isActive ? router.push(section.routePrefix) : setActiveIndex(i)}
-                className="outline-none relative flex items-center justify-center rounded-full bg-card border-2 shrink-0"
+                className="outline-none absolute flex items-center justify-center rounded-full bg-card border-2"
                 style={{
                   width: size,
                   height: size,
-                  transition: "width 320ms cubic-bezier(0.4,0,0.2,1), height 320ms cubic-bezier(0.4,0,0.2,1), box-shadow 320ms ease",
-                  marginLeft: i === 0 ? 0 : -16,
+                  left: `calc(50% + ${offset * spacing}px - ${size / 2}px)`,
+                  top: "50%",
+                  marginTop: -size / 2,
+                  transition,
                   borderColor: section.color,
                   boxShadow: isActive
-                    ? `0 0 28px ${section.glowColor}, 0 0 56px ${section.glowColor}`
+                    ? `0 0 28px ${section.glowColor}, 0 0 52px ${section.glowColor}`
                     : "0 2px 8px rgba(0,0,0,0.06)",
                   zIndex: isActive ? 10 : 5 - absOffset,
                 }}
@@ -321,11 +327,11 @@ export function HubView({ user, stats }: HubViewProps) {
                   </>
                 )}
                 {section.id === "new-run" || section.id === "new-order" ? (
-                  <div className="rounded-full flex items-center justify-center transition-all duration-300" style={{ width: innerSize, height: innerSize, backgroundColor: section.color }}>
+                  <div className="rounded-full flex items-center justify-center transition-all duration-[320ms]" style={{ width: innerSize, height: innerSize, backgroundColor: section.color }}>
                     <Plus size={iconSize} className="text-white" strokeWidth={2.5} />
                   </div>
                 ) : (
-                  <div className="rounded-full bg-secondary/50 flex items-center justify-center transition-all duration-300" style={{ width: innerSize, height: innerSize }}>
+                  <div className="rounded-full bg-secondary/50 flex items-center justify-center transition-all duration-[320ms]" style={{ width: innerSize, height: innerSize }}>
                     <Icon size={iconSize} style={{ color: section.color }} strokeWidth={1.5} />
                   </div>
                 )}

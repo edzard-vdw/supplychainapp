@@ -287,37 +287,57 @@ export function HubView({ user, stats }: HubViewProps) {
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
       >
-        {/* Overlapping circle row */}
+        {/* Conveyor belt circles */}
         <div className="flex items-center justify-center" style={{ height: 140 }}>
           {sections.map((section, i) => {
             const Icon = section.icon;
-            const isActive = i === activeIndex;
-            const size = isActive ? 80 : 54;
-            const iconSize = isActive ? 28 : 18;
+            const absOffset = Math.abs(i - activeIndex);
+            const isActive = absOffset === 0;
+            const size = absOffset === 0 ? 96 : absOffset === 1 ? 72 : 56;
+            const innerSize = size * 0.46;
+            const iconSize = absOffset === 0 ? 26 : absOffset === 1 ? 18 : 14;
 
             return (
-              <button
+              <motion.button
                 key={section.id}
+                layout
+                animate={{ width: size, height: size }}
+                transition={{ type: "spring", stiffness: 380, damping: 32 }}
                 onClick={() => isActive ? router.push(section.routePrefix) : setActiveIndex(i)}
-                className="outline-none relative flex items-center justify-center rounded-full bg-card border-2 transition-all duration-300"
+                className="outline-none relative flex items-center justify-center rounded-full bg-card border-2 shrink-0"
                 style={{
-                  width: size,
-                  height: size,
                   borderColor: section.color,
-                  boxShadow: isActive ? `0 0 24px ${section.glowColor}` : "none",
-                  marginLeft: i === 0 ? 0 : -10,
-                  zIndex: isActive ? 10 : 5 - Math.abs(i - activeIndex),
-                  opacity: isActive ? 1 : 0.65,
+                  boxShadow: isActive
+                    ? `0 0 28px ${section.glowColor}, 0 0 56px ${section.glowColor}`
+                    : "0 2px 8px rgba(0,0,0,0.06)",
+                  marginLeft: i === 0 ? 0 : -16,
+                  zIndex: isActive ? 10 : 5 - absOffset,
                 }}
               >
+                {/* Concentric rings on active */}
+                {isActive && (
+                  <>
+                    <div className="absolute inset-2 rounded-full border opacity-20" style={{ borderColor: section.color }} />
+                    <div className="absolute inset-4 rounded-full border opacity-10" style={{ borderColor: section.color }} />
+                  </>
+                )}
+
                 {section.id === "new-run" || section.id === "new-order" ? (
-                  <div className="rounded-full flex items-center justify-center" style={{ width: size * 0.5, height: size * 0.5, backgroundColor: section.color }}>
-                    <Plus size={iconSize * 0.75} className="text-white" strokeWidth={2.5} />
+                  <div
+                    className="rounded-full flex items-center justify-center"
+                    style={{ width: innerSize, height: innerSize, backgroundColor: section.color }}
+                  >
+                    <Plus size={iconSize} className="text-white" strokeWidth={2.5} />
                   </div>
                 ) : (
-                  <Icon size={iconSize} style={{ color: section.color }} strokeWidth={1.5} />
+                  <div
+                    className="rounded-full bg-secondary/50 flex items-center justify-center"
+                    style={{ width: innerSize, height: innerSize }}
+                  >
+                    <Icon size={iconSize} style={{ color: section.color }} strokeWidth={1.5} />
+                  </div>
                 )}
-              </button>
+              </motion.button>
             );
           })}
         </div>

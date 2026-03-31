@@ -291,54 +291,48 @@ export function HubView({ user, stats }: HubViewProps) {
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
       >
-        {/* Conveyor belt — active always screen-centred, cascading size */}
+        {/* Conveyor belt — active anchors to edge when at ends, overlapping cascade */}
         <div className="relative w-full" style={{ height: 140 }}>
-          {sections.map((section, i) => {
-            const Icon = section.icon;
-            const offset = i - activeIndex;
-            const absOffset = Math.abs(offset);
-            const isActive = absOffset === 0;
-            const size = absOffset === 0 ? 96 : absOffset === 1 ? 74 : 56;
-            const innerSize = size * 0.46;
-            const iconSize = absOffset === 0 ? 26 : absOffset === 1 ? 18 : 14;
-            const spacing = 68;
+          {(() => {
+            const spacing = 52;
+            const activeSize = 96;
+            const edgeMargin = 10;
+            // Active circle centre slides from left anchor → right anchor as activeIndex goes 0 → n-1
+            const leftAnchor = edgeMargin + activeSize / 2;
+            const rightAnchor = screenW - edgeMargin - activeSize / 2;
+            const activeCenter = sections.length > 1
+              ? leftAnchor + activeIndex * (rightAnchor - leftAnchor) / (sections.length - 1)
+              : screenW / 2;
             const ease = "cubic-bezier(0.4,0,0.2,1)";
             const transition = `left 320ms ${ease}, width 320ms ${ease}, height 320ms ${ease}, margin-top 320ms ${ease}, box-shadow 320ms ease`;
 
-            // Clamp group so all circles stay on screen
-            const margin = 12;
-            const hw = screenW / 2;
-            let minLeft = Infinity, maxRight = -Infinity;
-            sections.forEach((_, j) => {
-              const off = j - activeIndex;
-              const absOff = Math.abs(off);
-              const sz = absOff === 0 ? 96 : absOff === 1 ? 74 : 56;
-              const center = hw + off * spacing;
-              if (center - sz / 2 < minLeft) minLeft = center - sz / 2;
-              if (center + sz / 2 > maxRight) maxRight = center + sz / 2;
-            });
-            let groupShift = 0;
-            if (minLeft < margin) groupShift = margin - minLeft;
-            if (maxRight + groupShift > screenW - margin) groupShift -= (maxRight + groupShift) - (screenW - margin);
+            return sections.map((section, i) => {
+              const Icon = section.icon;
+              const offset = i - activeIndex;
+              const absOffset = Math.abs(offset);
+              const isActive = absOffset === 0;
+              const size = absOffset === 0 ? 96 : absOffset === 1 ? 74 : 56;
+              const innerSize = size * 0.46;
+              const iconSize = absOffset === 0 ? 26 : absOffset === 1 ? 18 : 14;
 
-            return (
-              <button
-                key={section.id}
-                onClick={() => isActive ? router.push(section.routePrefix) : setActiveIndex(i)}
-                className="outline-none absolute flex items-center justify-center rounded-full bg-card border-2"
-                style={{
-                  width: size,
-                  height: size,
-                  left: hw + offset * spacing + groupShift - size / 2,
-                  top: "50%",
-                  marginTop: -size / 2,
-                  transition,
-                  borderColor: section.color,
-                  boxShadow: isActive
-                    ? `0 0 28px ${section.glowColor}, 0 0 52px ${section.glowColor}`
-                    : "0 2px 8px rgba(0,0,0,0.06)",
-                  zIndex: isActive ? 10 : 5 - absOffset,
-                }}
+              return (
+                <button
+                  key={section.id}
+                  onClick={() => isActive ? router.push(section.routePrefix) : setActiveIndex(i)}
+                  className="outline-none absolute flex items-center justify-center rounded-full bg-card border-2"
+                  style={{
+                    width: size,
+                    height: size,
+                    left: activeCenter + offset * spacing - size / 2,
+                    top: "50%",
+                    marginTop: -size / 2,
+                    transition,
+                    borderColor: section.color,
+                    boxShadow: isActive
+                      ? `0 0 28px ${section.glowColor}, 0 0 52px ${section.glowColor}`
+                      : "0 2px 8px rgba(0,0,0,0.06)",
+                    zIndex: isActive ? 10 : 5 - absOffset,
+                  }}
               >
                 {isActive && (
                   <>
@@ -356,8 +350,9 @@ export function HubView({ user, stats }: HubViewProps) {
                   </div>
                 )}
               </button>
-            );
-          })}
+              );
+            });
+          })()}
         </div>
 
         {/* Active section label */}

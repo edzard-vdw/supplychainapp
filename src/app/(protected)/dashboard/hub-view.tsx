@@ -297,7 +297,7 @@ export function HubView({ user, stats }: HubViewProps) {
             const size = absOffset === 0 ? 96 : absOffset === 1 ? 74 : 56;
             const innerSize = size * 0.46;
             const iconSize = absOffset === 0 ? 26 : absOffset === 1 ? 18 : 14;
-            const spacing = 76;
+            const spacing = 60;
             const ease = "cubic-bezier(0.4,0,0.2,1)";
             const transition = `left 320ms ${ease}, width 320ms ${ease}, height 320ms ${ease}, margin-top 320ms ${ease}, box-shadow 320ms ease`;
 

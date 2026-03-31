@@ -47,7 +47,7 @@ export function DevRoleToggle() {
   }
 
   return (
-    <div className="fixed top-4 right-4 z-[100]">
+    <div className="fixed bottom-24 left-4 md:top-4 md:bottom-auto md:left-auto md:right-4 z-[100]">
       {/* Toggle button */}
       <button
         onClick={() => setOpen(!open)}
@@ -61,7 +61,7 @@ export function DevRoleToggle() {
 
       {/* Panel */}
       {open && (
-        <div className="absolute top-12 right-0 w-64 bg-card border border-border rounded-xl shadow-xl overflow-hidden">
+        <div className="absolute bottom-12 left-0 md:top-12 md:bottom-auto md:left-auto md:right-0 w-64 bg-card border border-border rounded-xl shadow-xl overflow-hidden">
           <div className="px-3 py-2 border-b border-border bg-secondary/30">
             <p className="text-[9px] font-mono-brand uppercase tracking-widest text-muted-foreground">Dev Role Toggle</p>
             <p className="text-[11px] font-semibold text-foreground">

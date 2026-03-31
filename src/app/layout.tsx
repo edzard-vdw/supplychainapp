@@ -17,7 +17,7 @@ const spaceMono = Space_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "The Loom — Supply Chain",
+  title: "The Thread",
   description: "Supply chain management for Sheep Inc.",
 };
 

@@ -127,7 +127,7 @@ export function AdminImpactView({ overview, dppData, pendingCount }: { overview:
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <p className="text-[11px] text-muted-foreground">
-              Per-product impact data derived from approved production run records. Ready to feed into The Loom&apos;s DPP.
+              Per-product impact data derived from approved production run records. Ready to feed into The Thread&apos;s DPP.
             </p>
             <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-foreground text-background text-[10px] font-bold uppercase tracking-wider">
               <FileDown size={12} /> Export CSV

@@ -233,7 +233,7 @@ export function Shell({ user, children }: ShellProps) {
           />
           <div className="fixed left-0 top-0 bottom-0 w-72 bg-card border-r border-border z-50 md:hidden flex flex-col">
             <div className="flex items-center justify-between h-14 px-5 border-b border-border">
-              <span className="text-sm font-bold uppercase tracking-wider">The Loom</span>
+              <span className="text-sm font-bold uppercase tracking-wider">The Thread</span>
               <button
                 onClick={() => setMobileMenuOpen(false)}
                 className="p-1 text-muted-foreground hover:text-foreground"

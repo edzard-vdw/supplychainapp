@@ -123,7 +123,7 @@ export function HubView({ user, stats }: HubViewProps) {
               className="fixed top-0 left-0 bottom-0 w-72 bg-card border-r border-border z-50 md:hidden flex flex-col"
             >
               <div className="h-12 px-4 flex items-center justify-between border-b border-border">
-                <span className="text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground">The Loom</span>
+                <span className="text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground">The Thread</span>
                 <button onClick={() => setMobileMenuOpen(false)} className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground">
                   <X size={18} />
                 </button>
@@ -166,7 +166,7 @@ export function HubView({ user, stats }: HubViewProps) {
         </Link>
         <div className="flex-1 flex flex-col items-center justify-center">
           <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-muted-foreground" style={{ writingMode: "vertical-rl", textOrientation: "mixed" }}>
-            THE LOOM
+            THE THREAD
           </span>
         </div>
         <div className="p-3 flex flex-col items-center gap-2">
@@ -187,7 +187,7 @@ export function HubView({ user, stats }: HubViewProps) {
         <button onClick={() => setMobileMenuOpen(true)} className="md:hidden w-9 h-9 rounded-lg flex items-center justify-center text-foreground hover:bg-secondary/50 transition-colors">
           <Menu size={20} />
         </button>
-        <span className="text-xs font-bold text-muted-foreground uppercase tracking-[0.3em] font-mono-brand md:hidden">The Loom</span>
+        <span className="text-xs font-bold text-muted-foreground uppercase tracking-[0.3em] font-mono-brand md:hidden">The Thread</span>
         <span className="text-xs font-bold text-muted-foreground uppercase tracking-[0.3em] font-mono-brand hidden md:inline">Sheep Inc.</span>
         <Link href="/dashboard" className="md:hidden w-8 h-8 flex items-center justify-center" title="Home">
           <div className="w-6 h-6 rounded-full border-2 border-primary flex items-center justify-center">
@@ -377,7 +377,7 @@ export function HubView({ user, stats }: HubViewProps) {
       {/* Footer */}
       <div className="relative z-10 text-center pb-5 shrink-0">
         <p className="text-[9px] text-muted-foreground/30 tracking-[0.25em] uppercase font-mono-brand">
-          The Loom — Supply Chain
+          The Thread
         </p>
       </div>
     </div>

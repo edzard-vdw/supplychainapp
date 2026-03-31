@@ -56,7 +56,7 @@ export default function LoginPage() {
         {/* Brand */}
         <div className="text-center mb-10">
           <h1 className="text-4xl font-bold text-white tracking-tight" style={{ fontFamily: "var(--font-space-grotesk)" }}>
-            The Loom
+            The Thread
           </h1>
           <p className="text-xs text-white/50 tracking-[0.2em] uppercase mt-2">Supply Chain</p>
           <div className="w-12 h-0.5 bg-white/30 mx-auto mt-3" />

@@ -93,12 +93,19 @@
     border-color: var(--color-border);
   }
 
+  html {
+    overscroll-behavior: none;
+    height: 100%;
+  }
+
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     letter-spacing: -0.02em;
+    overscroll-behavior: none;
+    height: 100%;
   }
 }
 

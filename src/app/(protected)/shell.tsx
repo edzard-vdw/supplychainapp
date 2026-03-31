@@ -42,7 +42,7 @@ export function Shell({ user, children }: ShellProps) {
   }
 
   return (
-    <div className="h-screen flex flex-col md:flex-row overflow-hidden bg-background">
+    <div className="h-dvh flex flex-col md:flex-row overflow-hidden bg-background">
       {/* ── Desktop Sidebar (narrow strip — matches hub) ── */}
       <div className="hidden md:flex flex-col w-14 bg-card border-r border-border shrink-0">
         {/* Circle / Home */}

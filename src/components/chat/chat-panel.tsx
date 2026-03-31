@@ -43,12 +43,21 @@ export function ChatPanel({ onClose, contextSuggestions }: ChatPanelProps) {
   }
 
   return (
+    <>
+      {/* Mobile backdrop */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 bg-black/40 z-30 md:hidden"
+        onClick={onClose}
+      />
     <motion.div
-      initial={{ opacity: 0, y: 20, scale: 0.95 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: 20, scale: 0.95 }}
-      transition={{ duration: 0.2, ease: [0.2, 0, 0, 1] }}
-      className="fixed bottom-24 right-6 z-40 w-[400px] h-[540px] bg-card border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+      initial={{ opacity: 0, y: "100%" }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: "100%" }}
+      transition={{ duration: 0.25, ease: [0.2, 0, 0, 1] }}
+      className="fixed inset-x-0 bottom-0 z-40 h-[88dvh] bg-card border-t border-border rounded-t-2xl shadow-2xl flex flex-col overflow-hidden md:inset-x-auto md:right-6 md:bottom-24 md:w-[400px] md:h-[540px] md:border md:rounded-2xl"
     >
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-card">
@@ -116,7 +125,7 @@ export function ChatPanel({ onClose, contextSuggestions }: ChatPanelProps) {
       </div>
 
       {/* Input */}
-      <form onSubmit={handleSubmit} className="px-4 py-3 border-t border-border bg-card">
+      <form onSubmit={handleSubmit} className="px-4 pt-3 pb-[max(12px,env(safe-area-inset-bottom))] border-t border-border bg-card">
         <div className="flex items-center gap-2 bg-secondary rounded-xl px-3 py-2">
           <input
             ref={inputRef}
@@ -136,5 +145,6 @@ export function ChatPanel({ onClose, contextSuggestions }: ChatPanelProps) {
         </div>
       </form>
     </motion.div>
+    </>
   );
 }

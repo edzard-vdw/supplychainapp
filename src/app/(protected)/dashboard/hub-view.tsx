@@ -37,7 +37,7 @@ export function HubView({ user, stats }: HubViewProps) {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [activeIndex, setActiveIndex] = useState(0);
+  const [activeIndex, setActiveIndex] = useState(() => Math.floor(sections.length / 2));
   const touchRef = useRef({ startX: 0, startY: 0 });
 
   const isAdmin = user.role === "ADMIN";
@@ -75,7 +75,7 @@ export function HubView({ user, stats }: HubViewProps) {
   const activeSection = sections[activeIndex];
 
   return (
-    <div className="h-screen w-full bg-background relative overflow-hidden flex flex-col">
+    <div className="h-dvh w-full bg-background relative overflow-hidden flex flex-col">
       {/* Geometric background — radial circles + lines */}
       {/* Geometric background — offset centre for sidebar on desktop */}
       {mounted && (
@@ -292,7 +292,7 @@ export function HubView({ user, stats }: HubViewProps) {
             const offset = i - activeIndex;
             const absOffset = Math.abs(offset);
             const scale = absOffset === 0 ? 1 : absOffset === 1 ? 0.6 : 0.4;
-            const translateX = offset * 85;
+            const translateX = offset * 72;
             const opacity = absOffset > 2 ? 0 : absOffset === 2 ? 0.3 : absOffset === 1 ? 0.55 : 1;
             const zIndex = 10 - absOffset;
             const isActive = absOffset === 0;

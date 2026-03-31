@@ -300,13 +300,11 @@ export function HubView({ user, stats }: HubViewProps) {
             return (
               <motion.button
                 key={section.id}
-                layout
+                animate={{ width: size, height: size }}
                 transition={{ type: "spring", stiffness: 350, damping: 30 }}
                 onClick={() => isActive ? router.push(section.routePrefix) : setActiveIndex(i)}
                 className="outline-none relative flex items-center justify-center rounded-full bg-card border-2 shrink-0"
                 style={{
-                  width: size,
-                  height: size,
                   borderColor: section.color,
                   boxShadow: isActive
                     ? `0 0 28px ${section.glowColor}, 0 0 56px ${section.glowColor}`

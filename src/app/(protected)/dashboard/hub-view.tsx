@@ -37,7 +37,7 @@ export function HubView({ user, stats }: HubViewProps) {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [activeIndex, setActiveIndex] = useState(() => Math.floor(sections.length / 2));
+  const [activeIndex, setActiveIndex] = useState(() => Math.floor(getSectionsForRole(user.role).length / 2));
   const touchRef = useRef({ startX: 0, startY: 0 });
 
   const isAdmin = user.role === "ADMIN";

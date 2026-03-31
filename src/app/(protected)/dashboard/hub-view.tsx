@@ -309,7 +309,7 @@ export function HubView({ user, stats }: HubViewProps) {
                 style={{
                   width: size,
                   height: size,
-                  left: `calc(50% + ${offset * spacing}px - ${size / 2}px)`,
+                  left: `calc(50vw + ${offset * spacing}px - ${size / 2}px)`,
                   top: "50%",
                   marginTop: -size / 2,
                   transition,

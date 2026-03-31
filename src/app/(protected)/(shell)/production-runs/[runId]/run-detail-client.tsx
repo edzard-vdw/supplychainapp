@@ -117,8 +117,12 @@ export function RunDetailClient({ run, role }: { run: RunFull; role: string }) {
               if (confirm("Delete this planned production run?")) {
                 startTransition(async () => {
                   const { deleteProductionRun } = await import("@/lib/actions/production-runs");
-                  await deleteProductionRun(run.id);
-                  router.push("/production-runs");
+                  const result = await deleteProductionRun(run.id);
+                  if (result.success) {
+                    router.push("/production-runs");
+                  } else {
+                    alert(result.error ?? "Failed to delete run");
+                  }
                 });
               }
             }}

@@ -1118,8 +1118,12 @@ export function ProductionRunsClient({
                           if (confirm("Delete this planned run?")) {
                             startTransition(async () => {
                               const { deleteProductionRun } = await import("@/lib/actions/production-runs");
-                              await deleteProductionRun(run.id);
-                              router.refresh();
+                              const result = await deleteProductionRun(run.id);
+                              if (result.success) {
+                                router.refresh();
+                              } else {
+                                alert(result.error ?? "Failed to delete run");
+                              }
                             });
                           }
                         }}

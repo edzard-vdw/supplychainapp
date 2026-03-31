@@ -38,12 +38,16 @@ export function HubView({ user, stats }: HubViewProps) {
   const [mounted, setMounted] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(() => Math.floor(getSectionsForRole(user.role).length / 2));
+  const [screenW, setScreenW] = useState(375);
   const touchRef = useRef({ startX: 0, startY: 0 });
 
   const isAdmin = user.role === "ADMIN";
   const sections = getSectionsForRole(user.role);
 
-  useEffect(() => { setMounted(true); }, []);
+  useEffect(() => {
+    setMounted(true);
+    setScreenW(window.innerWidth);
+  }, []);
 
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -298,9 +302,24 @@ export function HubView({ user, stats }: HubViewProps) {
             const innerSize = size * 0.46;
             const iconSize = absOffset === 0 ? 26 : absOffset === 1 ? 18 : 14;
             const spacing = 68;
-            const isVisible = absOffset <= 2;
             const ease = "cubic-bezier(0.4,0,0.2,1)";
-            const transition = `left 320ms ${ease}, width 320ms ${ease}, height 320ms ${ease}, margin-top 320ms ${ease}, opacity 200ms ease, box-shadow 320ms ease`;
+            const transition = `left 320ms ${ease}, width 320ms ${ease}, height 320ms ${ease}, margin-top 320ms ${ease}, box-shadow 320ms ease`;
+
+            // Clamp group so all circles stay on screen
+            const margin = 12;
+            const hw = screenW / 2;
+            let minLeft = Infinity, maxRight = -Infinity;
+            sections.forEach((_, j) => {
+              const off = j - activeIndex;
+              const absOff = Math.abs(off);
+              const sz = absOff === 0 ? 96 : absOff === 1 ? 74 : 56;
+              const center = hw + off * spacing;
+              if (center - sz / 2 < minLeft) minLeft = center - sz / 2;
+              if (center + sz / 2 > maxRight) maxRight = center + sz / 2;
+            });
+            let groupShift = 0;
+            if (minLeft < margin) groupShift = margin - minLeft;
+            if (maxRight + groupShift > screenW - margin) groupShift -= (maxRight + groupShift) - (screenW - margin);
 
             return (
               <button
@@ -310,12 +329,10 @@ export function HubView({ user, stats }: HubViewProps) {
                 style={{
                   width: size,
                   height: size,
-                  left: `calc(50vw + ${offset * spacing}px - ${size / 2}px)`,
+                  left: hw + offset * spacing + groupShift - size / 2,
                   top: "50%",
                   marginTop: -size / 2,
                   transition,
-                  opacity: isVisible ? 1 : 0,
-                  pointerEvents: isVisible ? "auto" : "none",
                   borderColor: section.color,
                   boxShadow: isActive
                     ? `0 0 28px ${section.glowColor}, 0 0 52px ${section.glowColor}`

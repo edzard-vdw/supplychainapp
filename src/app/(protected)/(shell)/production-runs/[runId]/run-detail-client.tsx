@@ -1,13 +1,20 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useMemo, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ContextualHelp } from "@/components/ui/contextual-help";
-import { ArrowLeft, Check, Lock, ScanLine, Package, Info } from "lucide-react";
+import { ArrowLeft, ChevronRight, ScanLine, Check, Lock, Package } from "lucide-react";
 import { StatusBadge, Badge } from "@/components/ui/badge";
-import { RUN_STATUS_DISPLAY, RUN_STATUS_ORDER, getAllowedTransitions, isAdminOnlyStatus, formatDate } from "@/types/supply-chain";
-import { updateProductionRun, generateBatchTag } from "@/lib/actions/production-runs";
+import {
+  RUN_STATUS_DISPLAY,
+  RUN_STATUS_ORDER,
+  getAllowedTransitions,
+  isAdminOnlyStatus,
+  formatDate,
+} from "@/types/supply-chain";
+import { updateProductionRun, generateBatchTag, startProduction } from "@/lib/actions/production-runs";
+
+// ─── Types ───────────────────────────────────────────────────────────────────
 
 type RunFull = {
   id: number;
@@ -15,75 +22,204 @@ type RunFull = {
   status: string;
   quantity: number;
   unitsProduced: number;
-  sku: string | null;
   productName: string | null;
   productColor: string | null;
   productSize: string | null;
   individualTagging: boolean;
   batchQrCode: string | null;
   batchNfcTag: string | null;
+  // Manufacturing (entered at IN_PRODUCTION)
+  yarnColourCode: string | null; // repurposed as "Yarn Stock" reference
   washingProgram: string | null;
   washingTemperature: number | null;
-  finishingProcess: string | null;
   machineGauge: string | null;
   knitwearPly: string | null;
+  stitchType: string | null;
+  // QC stage
   finisherName: string | null;
   finishedDate: string | null;
+  // Dates
   startDate: string | null;
-  expectedCompletion: string | null;
+  expectedExFactory: string | null;
   actualCompletion: string | null;
   notes: string | null;
+  // Relations
   supplier: { id: number; name: string } | null;
+  order: { id: number; orderRef: string; client: string | null; dueDate: string | null } | null;
   orderLine: {
     product: string;
     order: { orderRef: string } | null;
     color: { name: string; hexValue: string | null } | null;
   } | null;
-  order: { orderRef: string } | null;
-  sizeBreakdown: { id: number; size: string; sku: string | null; quantity: number; produced: number }[];
+  sizeBreakdown: { id: number; orderLineId: number | null; size: string; sku: string | null; quantity: number; produced: number }[];
   yarnCompositions: { id: number; yarnType: string; percentage: number }[];
   garments: { id: number; garmentCode: string; isTagged: boolean }[];
   _count: { garments: number };
 };
 
-export function RunDetailClient({ run, role }: { run: RunFull; role: string }) {
+type OrderLineWithColor = {
+  id: number;
+  colorId: number | null;
+  size: string | null;
+  quantity: number;
+  color: { name: string; hexValue: string | null } | null;
+};
+
+type UniqueColor = {
+  colorId: number;
+  name: string;
+  hexValue: string | null;
+  quantity: number;
+};
+
+// ─── Colour Swatch ───────────────────────────────────────────────────────────
+
+function ColorSwatch({ hexValue, name, size = "md" }: { hexValue: string | null; name: string; size?: "sm" | "md" }) {
+  const sz = size === "sm" ? "w-3 h-3" : "w-4 h-4";
+  return (
+    <div
+      className={`${sz} rounded-full border border-border shrink-0`}
+      style={{ backgroundColor: hexValue ?? "#ccc" }}
+      title={name}
+    />
+  );
+}
+
+// ─── Main Component ──────────────────────────────────────────────────────────
+
+export function RunDetailClient({
+  run,
+  orderLines,
+  role,
+}: {
+  run: RunFull;
+  orderLines: OrderLineWithColor[];
+  role: string;
+}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [confirmStatus, setConfirmStatus] = useState<string | null>(null);
 
-  const taggedCount = run.garments.filter((g) => g.isTagged).length;
+  // ── Derive unique colors from the run's sizeBreakdown + orderLines ──
+  const uniqueColors = useMemo<UniqueColor[]>(() => {
+    const lineToColor = new Map<number, { id: number; name: string; hexValue: string | null }>();
+    orderLines.forEach((ol) => {
+      if (ol.colorId && ol.color) {
+        lineToColor.set(ol.id, { id: ol.colorId, name: ol.color.name, hexValue: ol.color.hexValue });
+      }
+    });
+    const colorMap = new Map<number, UniqueColor>();
+    run.sizeBreakdown.forEach((sb) => {
+      if (!sb.orderLineId) return;
+      const color = lineToColor.get(sb.orderLineId);
+      if (!color) return;
+      const existing = colorMap.get(color.id);
+      if (existing) {
+        existing.quantity += sb.quantity;
+      } else {
+        colorMap.set(color.id, { colorId: color.id, name: color.name, hexValue: color.hexValue, quantity: sb.quantity });
+      }
+    });
+    return Array.from(colorMap.values());
+  }, [run.sizeBreakdown, orderLines]);
+
+  // ── Status helpers ──
   const allowedStatuses = getAllowedTransitions(run.status, role);
   const currentIdx = RUN_STATUS_ORDER.indexOf(run.status as typeof RUN_STATUS_ORDER[number]);
 
-  // Auto-suggest: if all scanned, suggest moving to QC
-  const allScanned = run.individualTagging && run.unitsProduced >= run.quantity && run.quantity > 0;
-  const suggestQC = allScanned && run.status === "IN_PRODUCTION";
+  // ── "Start Production" modal state ──
+  const [showStartModal, setShowStartModal] = useState(false);
+  const [startStep, setStartStep] = useState<1 | 2>(1);
+  const [allColors, setAllColors] = useState(true);
+  const [selectedColorIds, setSelectedColorIds] = useState<number[]>([]);
+  const [mfgForm, setMfgForm] = useState({
+    yarnStock: "",
+    machineGauge: "",
+    knitwearPly: "",
+    stitchType: "",
+    washingProgram: "",
+    washingTemperature: "",
+    expectedExFactory: "",
+  });
 
-  function handleStatusClick(newStatus: string) {
-    if (!allowedStatuses.includes(newStatus) || newStatus === run.status) return;
-    setConfirmStatus(newStatus);
+  // ── QC: finisher name ──
+  const [finisherNameInput, setFinisherNameInput] = useState(run.finisherName ?? "");
+  const [savingFinisher, setSavingFinisher] = useState(false);
+
+  // ── Confirm status change (for backward moves or admin actions) ──
+  const [confirmStatus, setConfirmStatus] = useState<string | null>(null);
+
+  function handleMfgChange(field: keyof typeof mfgForm, value: string) {
+    setMfgForm((prev) => ({ ...prev, [field]: value }));
   }
 
-  function confirmStatusChange() {
-    if (!confirmStatus) return;
-    const newStatus = confirmStatus;
-    setConfirmStatus(null);
+  function toggleColor(colorId: number) {
+    setSelectedColorIds((prev) =>
+      prev.includes(colorId) ? prev.filter((id) => id !== colorId) : [...prev, colorId]
+    );
+  }
+
+  function openStartModal() {
+    setStartStep(1);
+    setAllColors(true);
+    setSelectedColorIds([]);
+    setMfgForm({ yarnStock: "", machineGauge: "", knitwearPly: "", stitchType: "", washingProgram: "", washingTemperature: "", expectedExFactory: "" });
+    setShowStartModal(true);
+  }
+
+  function handleStartStep1Next() {
+    if (!allColors && selectedColorIds.length === 0) return;
+    setStartStep(2);
+  }
+
+  function handleConfirmStartProduction() {
+    startTransition(async () => {
+      const result = await startProduction(run.id, {
+        selectedColorIds: allColors ? null : selectedColorIds,
+        yarnStock: mfgForm.yarnStock || null,
+        machineGauge: mfgForm.machineGauge || null,
+        knitwearPly: mfgForm.knitwearPly || null,
+        stitchType: mfgForm.stitchType || null,
+        washingProgram: mfgForm.washingProgram || null,
+        washingTemperature: mfgForm.washingTemperature ? parseFloat(mfgForm.washingTemperature) : null,
+        expectedExFactory: mfgForm.expectedExFactory || null,
+      });
+      setShowStartModal(false);
+      if (result.success && result.runId) {
+        router.push(`/production-runs/${result.runId}`);
+        router.refresh();
+      } else {
+        alert(result.error ?? "Failed to start production");
+      }
+    });
+  }
+
+  function handleStatusAdvance(newStatus: string) {
+    if (!allowedStatuses.includes(newStatus)) return;
     startTransition(async () => {
       const updateData: Record<string, unknown> = { status: newStatus };
-      if (newStatus === "IN_PRODUCTION" && !run.startDate) {
-        updateData.startDate = new Date().toISOString();
-      }
       if (newStatus === "COMPLETED") {
         updateData.actualCompletion = new Date().toISOString();
+      }
+      if (newStatus === "SHIPPED" && run.status === "QC") {
+        // Auto-set finishedDate when completing QC / moving to SHIPPED
+        updateData.finishedDate = new Date().toISOString();
+        if (finisherNameInput && !run.finisherName) {
+          updateData.finisherName = finisherNameInput;
+        }
       }
       await updateProductionRun(run.id, updateData);
       router.refresh();
     });
   }
 
-  const isMovingBackward = confirmStatus
-    ? RUN_STATUS_ORDER.indexOf(confirmStatus as typeof RUN_STATUS_ORDER[number]) < currentIdx
-    : false;
+  function handleSaveFinisher() {
+    setSavingFinisher(true);
+    startTransition(async () => {
+      await updateProductionRun(run.id, { finisherName: finisherNameInput });
+      setSavingFinisher(false);
+      router.refresh();
+    });
+  }
 
   function handleGenerateBatchTag(type: "qr" | "nfc") {
     startTransition(async () => {
@@ -92,532 +228,687 @@ export function RunDetailClient({ run, role }: { run: RunFull; role: string }) {
     });
   }
 
+  const orderRef = run.order?.orderRef ?? run.orderLine?.order?.orderRef ?? "—";
+  const client = run.order?.client;
+  const dueDate = run.order?.dueDate;
+  const productName = run.productName ?? run.orderLine?.product ?? "—";
+
+  // ── Grouped size breakdown with color info ──
+  const lineToColor = useMemo(() => {
+    const map = new Map<number, { name: string; hexValue: string | null }>();
+    orderLines.forEach((ol) => {
+      if (ol.colorId && ol.color) map.set(ol.id, ol.color);
+    });
+    return map;
+  }, [orderLines]);
+
   return (
-    <div className="px-6 py-8 max-w-[1000px] mx-auto">
-      {/* Header */}
+    <div className="px-4 py-6 max-w-[700px] mx-auto">
+      {/* ── Header ── */}
       <div className="flex items-center gap-3 mb-6">
-        <Link href="/production-runs" className="p-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground">
+        <Link
+          href="/production-runs"
+          className="p-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+        >
           <ArrowLeft size={18} />
         </Link>
-        <div className="flex-1">
-          <div className="flex items-center gap-2">
-            <h1 className="text-[20px] font-bold uppercase tracking-wide text-foreground">{run.runCode}</h1>
-            <StatusBadge display={RUN_STATUS_DISPLAY[run.status] || RUN_STATUS_DISPLAY.PLANNED} />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h1 className="text-[18px] font-bold uppercase tracking-wide text-foreground">{run.runCode}</h1>
+            <StatusBadge display={RUN_STATUS_DISPLAY[run.status] ?? RUN_STATUS_DISPLAY.PLANNED} />
           </div>
-          <p className="text-[10px] text-muted-foreground mt-0.5">
-            {run.orderLine ? `${run.orderLine.order?.orderRef} · ${run.orderLine.product}` : "No order linked"}
-            {run.supplier ? ` · ${run.supplier.name}` : ""}
+          <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
+            {orderRef} · {productName}
           </p>
         </div>
         {run.status === "PLANNED" && (
           <button
             onClick={() => {
-              if (confirm("Delete this planned production run?")) {
+              if (confirm("Delete this planned run? This cannot be undone.")) {
                 startTransition(async () => {
                   const { deleteProductionRun } = await import("@/lib/actions/production-runs");
-                  const result = await deleteProductionRun(run.id);
-                  if (result.success) {
-                    router.push("/production-runs");
-                  } else {
-                    alert(result.error ?? "Failed to delete run");
-                  }
+                  const r = await deleteProductionRun(run.id);
+                  if (r.success) router.push("/production-runs");
+                  else alert(r.error ?? "Failed to delete");
                 });
               }
             }}
             disabled={isPending}
-            className="px-3 py-1.5 rounded-lg text-[10px] font-semibold text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50"
+            className="text-[10px] font-semibold text-destructive hover:bg-destructive/10 px-2 py-1 rounded-lg transition-colors disabled:opacity-50 shrink-0"
           >
-            Delete Run
+            Delete
           </button>
         )}
       </div>
 
-      {/* Status Pipeline — the key UI */}
-      <div className="bg-card border border-border rounded-xl p-5 mb-6">
-        <h3 className="text-[11px] font-bold uppercase tracking-wider text-foreground mb-4">Status Pipeline</h3>
-
-        {/* Goods receipt banner — admin sees this when run is SHIPPED */}
-        {run.status === "SHIPPED" && role === "ADMIN" && (
-          <div className="flex items-center gap-3 p-3 rounded-lg bg-badge-sky-bg/50 border border-badge-sky-text/20 mb-4">
-            <span className="text-[11px] font-medium text-badge-sky-text">
-              This run has been shipped by the supplier. Ready to confirm receipt?
-            </span>
-            <Link
-              href={`/production-runs/${run.id}/receive`}
-              className="px-3 py-1 rounded-lg bg-badge-sky-text text-white text-[10px] font-bold uppercase tracking-wider"
-            >
-              Receive Goods
-            </Link>
-          </div>
-        )}
-
-        {/* QC suggestion banner */}
-        {suggestQC && (
-          <div className="flex items-center gap-3 p-3 rounded-lg bg-badge-purple-bg/50 border border-badge-purple-text/20 mb-4">
-            <span className="text-[11px] font-medium text-badge-purple-text">
-              All {run.quantity} garments scanned — ready to move to QC?
-            </span>
-            <button
-              onClick={() => handleStatusClick("QC")}
-              disabled={isPending}
-              className="px-3 py-1 rounded-lg bg-badge-purple-text text-white text-[10px] font-bold uppercase tracking-wider disabled:opacity-50"
-            >
-              Move to QC
-            </button>
-          </div>
-        )}
-
-        {/* Pipeline steps */}
-        <div className="flex items-center gap-0 overflow-x-auto scrollbar-none">
+      {/* ── Status Pipeline (compact) ── */}
+      <div className="bg-card border border-border rounded-xl p-4 mb-5 overflow-x-auto">
+        <div className="flex items-center min-w-max gap-0">
           {RUN_STATUS_ORDER.map((status, i) => {
             const display = RUN_STATUS_DISPLAY[status];
             const isCurrent = run.status === status;
             const isPast = i < currentIdx;
-            const canSet = allowedStatuses.includes(status);
+            const canSet = allowedStatuses.includes(status) && !isCurrent;
             const isAdminOnly = isAdminOnlyStatus(status);
 
             return (
               <div key={status} className="flex items-center">
                 {i > 0 && (
-                  <div className={`w-4 sm:w-8 h-0.5 shrink-0 ${isPast ? "bg-badge-green-text" : "bg-border"}`} />
+                  <div className={`w-5 h-0.5 shrink-0 ${isPast ? "bg-badge-green-text" : "bg-border"}`} />
                 )}
                 <button
-                  onClick={() => canSet && !isCurrent ? handleStatusClick(status) : undefined}
-                  disabled={isPending || !canSet || isCurrent}
-                  className={`relative flex flex-col items-center gap-1.5 px-2 sm:px-3 py-2 rounded-xl transition-all shrink-0 ${
+                  onClick={() => canSet ? setConfirmStatus(status) : undefined}
+                  disabled={isPending || !canSet}
+                  className={`relative flex flex-col items-center gap-1 px-2 py-1.5 rounded-lg transition-all shrink-0 ${
                     isCurrent
-                      ? "bg-foreground text-background scale-105"
+                      ? "bg-foreground text-background"
                       : isPast
                         ? "bg-badge-green-bg text-badge-green-text cursor-pointer hover:scale-105"
                         : canSet
-                          ? "bg-secondary/50 text-foreground cursor-pointer hover:bg-secondary hover:scale-105"
+                          ? "bg-secondary/50 text-foreground cursor-pointer hover:bg-secondary"
                           : "bg-muted/30 text-muted-foreground/40"
                   }`}
                 >
-                  {/* Step indicator */}
-                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold ${
+                  <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold ${
                     isCurrent ? "bg-background text-foreground" :
-                    isPast ? "bg-badge-green-text text-white" :
-                    "bg-muted"
+                    isPast ? "bg-badge-green-text text-white" : "bg-muted/50"
                   }`}>
-                    {isPast ? <Check size={12} /> : isAdminOnly && role !== "ADMIN" ? <Lock size={10} /> : i + 1}
+                    {isPast ? <Check size={10} /> : isAdminOnly && role !== "ADMIN" ? <Lock size={8} /> : i + 1}
                   </div>
-                  <span className="text-[8px] sm:text-[9px] font-bold uppercase tracking-wider whitespace-nowrap">
-                    {display?.label || status}
+                  <span className="text-[8px] font-bold uppercase tracking-wide whitespace-nowrap">
+                    {display?.label ?? status}
                   </span>
                 </button>
               </div>
             );
           })}
         </div>
+      </div>
 
-        {role !== "ADMIN" && (
-          <p className="text-[9px] text-muted-foreground mt-3">
-            You can advance the run up to &quot;Shipped&quot;. Admin will confirm receipt and completion.
+      {/* Confirm status change dialog */}
+      {confirmStatus && (
+        <div className="bg-card border-2 border-foreground/20 rounded-xl p-4 mb-5">
+          <p className="text-[12px] font-semibold text-foreground mb-1">Confirm status change</p>
+          <p className="text-[11px] text-muted-foreground mb-3">
+            Move this run to &ldquo;{RUN_STATUS_DISPLAY[confirmStatus]?.label}&rdquo;?
           </p>
-        )}
-
-        {/* Confirm dialog */}
-        {confirmStatus && (
-          <div className="mt-4 p-4 rounded-xl border-2 border-foreground/20 bg-secondary/50">
-            <p className="text-[12px] font-semibold text-foreground mb-1">
-              {isMovingBackward ? "Revert status?" : "Confirm status change"}
-            </p>
-            <p className="text-[11px] text-muted-foreground mb-3">
-              {isMovingBackward
-                ? `Move this run back to "${RUN_STATUS_DISPLAY[confirmStatus]?.label}"? This will revert progress.`
-                : `Move this run to "${RUN_STATUS_DISPLAY[confirmStatus]?.label}"?`
-              }
-            </p>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={confirmStatusChange}
-                disabled={isPending}
-                className={`px-4 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider text-white disabled:opacity-50 ${
-                  isMovingBackward ? "bg-badge-orange-text" : "bg-foreground"
-                }`}
-              >
-                {isPending ? "Updating..." : isMovingBackward ? "Yes, Revert" : "Confirm"}
-              </button>
-              <button
-                onClick={() => setConfirmStatus(null)}
-                className="px-4 py-2 rounded-lg text-[11px] text-muted-foreground hover:text-foreground transition-colors"
-              >
-                Cancel
-              </button>
-            </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => { handleStatusAdvance(confirmStatus); setConfirmStatus(null); }}
+              disabled={isPending}
+              className="px-4 py-2 rounded-lg bg-foreground text-background text-[11px] font-bold uppercase tracking-wider disabled:opacity-50"
+            >
+              {isPending ? "Updating…" : "Confirm"}
+            </button>
+            <button
+              onClick={() => setConfirmStatus(null)}
+              className="px-4 py-2 rounded-lg text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Cancel
+            </button>
           </div>
-        )}
-      </div>
-
-      {/* KPI row */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-        <div className="bg-card border border-border rounded-xl p-4">
-          <p className="text-[9px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1">Quantity</p>
-          <p className="text-[22px] font-bold tabular-nums">{run.quantity}</p>
-        </div>
-        <div className="bg-card border border-border rounded-xl p-4">
-          <p className="text-[9px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1">Produced</p>
-          <p className="text-[22px] font-bold tabular-nums">{run.unitsProduced}</p>
-        </div>
-        <div className="bg-card border border-border rounded-xl p-4">
-          <p className="text-[9px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1">Garments</p>
-          <p className="text-[22px] font-bold tabular-nums">{run._count.garments}</p>
-        </div>
-        <div className="bg-card border border-border rounded-xl p-4">
-          <p className="text-[9px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1">Tagged</p>
-          <p className="text-[22px] font-bold tabular-nums text-badge-green-text">{taggedCount}</p>
-        </div>
-      </div>
-
-      {/* ── Scanning ─────────────────────────────────────────────────────────── */}
-      <div className={`rounded-xl border-2 p-5 mb-6 transition-colors ${
-        run.status === "IN_PRODUCTION"
-          ? "bg-card border-foreground/20"
-          : "bg-muted/30 border-border"
-      }`}>
-        <div className="flex items-center justify-between mb-4">
-          <h3 className={`text-[11px] font-bold uppercase tracking-wider ${
-            run.status === "IN_PRODUCTION" ? "text-foreground" : "text-muted-foreground"
-          }`}>
-            Scanning
-          </h3>
-          {run.status !== "IN_PRODUCTION" && (
-            <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-              <Info size={11} />
-              {run.status === "PLANNED" ? "Set status to In Production to unlock" : "Scanning complete"}
-            </div>
-          )}
-        </div>
-
-        {/* Batch scanning — primary */}
-        <div className={`rounded-xl p-4 mb-3 border ${
-          run.status === "IN_PRODUCTION"
-            ? "bg-foreground text-background border-transparent"
-            : "bg-muted/50 border-border"
-        }`}>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Package size={20} className={run.status === "IN_PRODUCTION" ? "text-background" : "text-muted-foreground/40"} strokeWidth={1.5} />
-              <div>
-                <p className={`text-[13px] font-bold ${run.status === "IN_PRODUCTION" ? "text-background" : "text-muted-foreground/50"}`}>
-                  Batch Scan
-                </p>
-                <p className={`text-[11px] ${run.status === "IN_PRODUCTION" ? "text-background/70" : "text-muted-foreground/40"}`}>
-                  Generate one QR / NFC tag for the entire run
-                </p>
-              </div>
-            </div>
-            {run.status === "IN_PRODUCTION" ? (
-              run.batchQrCode ? (
-                <span className="px-4 py-2 rounded-lg bg-background/20 text-background text-[11px] font-bold uppercase tracking-wider">
-                  Generated ✓
-                </span>
-              ) : (
-                <button
-                  onClick={() => handleGenerateBatchTag("qr")}
-                  disabled={isPending}
-                  className="px-4 py-2 rounded-lg bg-background text-foreground text-[11px] font-bold uppercase tracking-wider disabled:opacity-50"
-                >
-                  {isPending ? "Generating…" : "Generate QR"}
-                </button>
-              )
-            ) : (
-              <span className="px-4 py-2 rounded-lg bg-muted/40 text-muted-foreground/40 text-[11px] font-bold uppercase tracking-wider">
-                Locked
-              </span>
-            )}
-          </div>
-
-          {/* Show existing batch QR code */}
-          {run.status === "IN_PRODUCTION" && run.batchQrCode && (
-            <div className="mt-3 pt-3 border-t border-background/20 flex items-center gap-4">
-              <img
-                src={`/api/qr/generate?data=${encodeURIComponent(run.batchQrCode)}`}
-                alt="Batch QR"
-                className="w-16 h-16 bg-white rounded-lg p-1 shrink-0"
-              />
-              <div>
-                <p className="text-[9px] text-background/60 uppercase tracking-wider mb-0.5">Batch QR Code</p>
-                <p className="text-[10px] font-mono-brand text-background/80 break-all">{run.batchQrCode.slice(0, 32)}…</p>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Individual scanning — secondary */}
-        <div className={`rounded-xl p-4 border ${
-          run.status === "IN_PRODUCTION" ? "bg-card border-border" : "bg-muted/20 border-border/50"
-        }`}>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <ScanLine size={20} className={run.status === "IN_PRODUCTION" ? "text-foreground" : "text-muted-foreground/40"} strokeWidth={1.5} />
-              <div>
-                <p className={`text-[13px] font-bold ${run.status === "IN_PRODUCTION" ? "text-foreground" : "text-muted-foreground/40"}`}>
-                  Scan Individual Garments
-                </p>
-                <p className={`text-[11px] ${run.status === "IN_PRODUCTION" ? "text-muted-foreground" : "text-muted-foreground/40"}`}>
-                  Tag each garment one by one · {run.unitsProduced}/{run.quantity} scanned
-                </p>
-              </div>
-            </div>
-            {run.status === "IN_PRODUCTION" ? (
-              <Link
-                href={`/production-runs/${run.id}/scan`}
-                className="px-4 py-2 rounded-lg border border-border text-[11px] font-bold uppercase tracking-wider text-foreground hover:bg-secondary transition-colors"
-              >
-                Open
-              </Link>
-            ) : (
-              <span className="px-4 py-2 rounded-lg bg-muted/40 text-muted-foreground/40 text-[11px] font-bold uppercase tracking-wider">
-                Locked
-              </span>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Product info */}
-      {(run.sku || run.productName || run.sizeBreakdown.length > 0) && (
-        <div className="bg-card border border-border rounded-xl p-6 mb-6">
-          <h3 className="text-[11px] font-bold uppercase tracking-wider text-foreground mb-4">Product</h3>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-4">
-            <div>
-              <p className="text-[9px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1">Product</p>
-              <p className="text-[12px] text-foreground">{run.productName || "—"}</p>
-            </div>
-            <div>
-              <p className="text-[9px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1">Colour</p>
-              <p className="text-[12px] text-foreground">{run.productColor || "—"}</p>
-            </div>
-            <div>
-              <p className="text-[9px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1">Order</p>
-              <p className="text-[12px] text-foreground">{run.order?.orderRef || run.orderLine?.order?.orderRef || "—"}</p>
-            </div>
-          </div>
-
-          {/* Size breakdown table */}
-          {run.sizeBreakdown.length > 0 ? (
-            <div>
-              <p className="text-[9px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-2">Size Breakdown</p>
-              <div className="border border-border rounded-lg overflow-hidden">
-                <table className="w-full text-[11px]">
-                  <thead className="bg-secondary/30">
-                    <tr>
-                      <th className="text-left px-3 py-2 font-mono-brand uppercase tracking-wider text-muted-foreground text-[9px]">Size</th>
-                      <th className="text-left px-3 py-2 font-mono-brand uppercase tracking-wider text-muted-foreground text-[9px]">SKU</th>
-                      <th className="text-right px-3 py-2 font-mono-brand uppercase tracking-wider text-muted-foreground text-[9px]">Ordered</th>
-                      <th className="text-right px-3 py-2 font-mono-brand uppercase tracking-wider text-muted-foreground text-[9px]">Produced</th>
-                      <th className="px-3 py-2 text-[9px]">Progress</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {run.sizeBreakdown.map((sb) => (
-                      <tr key={sb.id}>
-                        <td className="px-3 py-2 font-semibold text-foreground">{sb.size}</td>
-                        <td className="px-3 py-2 font-mono-brand text-muted-foreground">{sb.sku || "—"}</td>
-                        <td className="px-3 py-2 font-mono-brand text-foreground text-right tabular-nums">{sb.quantity}</td>
-                        <td className="px-3 py-2 font-mono-brand text-foreground text-right tabular-nums">{sb.produced}</td>
-                        <td className="px-3 py-2">
-                          <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
-                            <div className="h-full rounded-full" style={{ width: `${sb.quantity > 0 ? (sb.produced / sb.quantity) * 100 : 0}%`, backgroundColor: "hsl(142 76% 36%)" }} />
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                    <tr className="bg-secondary/20 font-bold">
-                      <td className="px-3 py-2 text-foreground">Total</td>
-                      <td className="px-3 py-2"></td>
-                      <td className="px-3 py-2 font-mono-brand text-foreground text-right tabular-nums">{run.sizeBreakdown.reduce((s, sb) => s + sb.quantity, 0)}</td>
-                      <td className="px-3 py-2 font-mono-brand text-foreground text-right tabular-nums">{run.sizeBreakdown.reduce((s, sb) => s + sb.produced, 0)}</td>
-                      <td className="px-3 py-2"></td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          ) : run.productSize ? (
-            <div>
-              <p className="text-[9px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1">Size</p>
-              <p className="text-[12px] text-foreground">{run.productSize}</p>
-            </div>
-          ) : null}
         </div>
       )}
 
-      {/* Scanning & Tagging */}
-      <div className="bg-card border border-border rounded-xl p-6 mb-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-[11px] font-bold uppercase tracking-wider text-foreground">Scanning & Tagging</h3>
-          <Badge
-            label={run.individualTagging ? "Individual Tagging" : "Bulk Mode"}
-            bgClass={run.individualTagging ? "bg-badge-purple-bg" : "bg-badge-blue-bg"}
-            textClass={run.individualTagging ? "text-badge-purple-text" : "text-badge-blue-text"}
-          />
+      {/* ── PO Summary (always shown) ── */}
+      <div className="bg-card border border-border rounded-xl p-5 mb-5">
+        <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-3">Purchase Order</p>
+        <div className="grid grid-cols-2 gap-4 mb-4">
+          <div>
+            <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-0.5">Order Ref</p>
+            <p className="text-[13px] font-bold text-foreground">{orderRef}</p>
+          </div>
+          {client && (
+            <div>
+              <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-0.5">Client</p>
+              <p className="text-[13px] font-semibold text-foreground">{client}</p>
+            </div>
+          )}
+          <div>
+            <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-0.5">Due Date</p>
+            <p className="text-[13px] font-semibold text-foreground">{dueDate ? formatDate(dueDate) : "—"}</p>
+          </div>
+          <div>
+            <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-0.5">Total Units</p>
+            <p className="text-[20px] font-bold tabular-nums text-foreground leading-tight">{run.quantity.toLocaleString()}</p>
+          </div>
         </div>
 
-        {/* Tally + progress */}
-        <div className="flex items-center gap-4 mb-4">
+        {/* Colour swatches */}
+        {uniqueColors.length > 0 && (
           <div>
-            <p className="text-[9px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1">
-              {run.individualTagging ? "Garments Scanned" : "Units Produced"}
-            </p>
-            <p className="text-[28px] font-bold tabular-nums leading-none" style={{ color: "hsl(142 76% 36%)" }}>
-              {run.unitsProduced}<span className="text-[16px] text-muted-foreground">/{run.quantity}</span>
-            </p>
-          </div>
-          <div className="flex-1">
-            <div className="h-3 bg-muted rounded-full overflow-hidden">
-              <div
-                className="h-full rounded-full transition-all"
-                style={{
-                  width: `${run.quantity > 0 ? (run.unitsProduced / run.quantity) * 100 : 0}%`,
-                  backgroundColor: "hsl(142 76% 36%)",
-                }}
-              />
+            <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-2">Colours</p>
+            <div className="flex flex-wrap gap-2">
+              {uniqueColors.map((c) => (
+                <div
+                  key={c.colorId}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-secondary/50 border border-border"
+                >
+                  <ColorSwatch hexValue={c.hexValue} name={c.name} size="sm" />
+                  <span className="text-[11px] font-medium text-foreground">{c.name}</span>
+                  <span className="text-[10px] text-muted-foreground">{c.quantity.toLocaleString()}</span>
+                </div>
+              ))}
             </div>
           </div>
-        </div>
+        )}
+      </div>
 
-        {/* Scan button — only available once IN_PRODUCTION */}
-        <div className="flex items-center gap-3 mb-4">
-          {["IN_PRODUCTION", "QC", "READY_TO_SHIP", "SHIPPED"].includes(run.status) ? (
-            <Link
-              href={`/production-runs/${run.id}/scan`}
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl text-[12px] font-bold uppercase tracking-wider text-white transition-all hover:scale-[1.02]"
-              style={{ backgroundColor: "hsl(25 95% 53%)" }}
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2" /><path d="M17 3h2a2 2 0 0 1 2 2v2" /><path d="M21 17v2a2 2 0 0 1-2 2h-2" /><path d="M7 21H5a2 2 0 0 1-2-2v-2" /><line x1="8" y1="12" x2="16" y2="12" /></svg>
-              Start Scanning
-            </Link>
-          ) : (
+      {/* ── PLANNED: Start Production CTA ── */}
+      {run.status === "PLANNED" && (
+        <button
+          onClick={openStartModal}
+          disabled={isPending}
+          className="w-full py-4 rounded-xl bg-foreground text-background text-[13px] font-bold uppercase tracking-wider mb-5 flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50"
+        >
+          Start Production
+          <ChevronRight size={16} strokeWidth={2.5} />
+        </button>
+      )}
+
+      {/* ── IN_PRODUCTION: Manufacturing Details + Progress ── */}
+      {run.status === "IN_PRODUCTION" && (
+        <>
+          {/* Manufacturing details */}
+          <div className="bg-card border border-border rounded-xl p-5 mb-5">
+            <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-3">Manufacturing Details</p>
+            <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+              {[
+                { label: "Yarn Stock", value: run.yarnColourCode },
+                { label: "Machine Gauge", value: run.machineGauge },
+                { label: "Knitwear Ply", value: run.knitwearPly },
+                { label: "Stitch Type", value: run.stitchType },
+                { label: "Washing Program", value: run.washingProgram },
+                { label: "Temperature", value: run.washingTemperature != null ? `${run.washingTemperature}°C` : null },
+                { label: "Start Date", value: formatDate(run.startDate) },
+                { label: "Expected Ex-Factory", value: formatDate(run.expectedExFactory) },
+              ].map(({ label, value }) => (
+                <div key={label}>
+                  <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-0.5">{label}</p>
+                  <p className="text-[12px] text-foreground">{value || "—"}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Progress */}
+          <div className="bg-card border border-border rounded-xl p-5 mb-5">
+            <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-3">Progress</p>
+            <div className="flex items-end gap-3 mb-3">
+              <p className="text-[32px] font-bold tabular-nums leading-none text-foreground">
+                {run.unitsProduced}
+              </p>
+              <p className="text-[16px] text-muted-foreground mb-1">/ {run.quantity} units</p>
+            </div>
+            <div className="h-2 bg-secondary rounded-full overflow-hidden mb-4">
+              <div
+                className="h-full rounded-full bg-badge-orange-text transition-all"
+                style={{ width: `${run.quantity > 0 ? (run.unitsProduced / run.quantity) * 100 : 0}%` }}
+              />
+            </div>
             <p className="text-[11px] text-muted-foreground">
-              Scanning available once the run is moved to <span className="font-semibold text-foreground">In Production</span>.
+              Scanning is unlocked at the Quality Check / Scan stage.
             </p>
-          )}
-        </div>
+          </div>
 
-        {/* Batch tags (bulk mode) */}
-        {!run.individualTagging && (
-          <div className="border-t border-border pt-4">
-            <p className="text-[10px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-3">Batch Tags</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="bg-secondary/30 rounded-lg p-4">
-                <p className="text-[9px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1">Batch QR Code</p>
+          {/* Move to QC CTA */}
+          <button
+            onClick={() => handleStatusAdvance("QC")}
+            disabled={isPending || !allowedStatuses.includes("QC")}
+            className="w-full py-4 rounded-xl bg-badge-purple-text text-white text-[13px] font-bold uppercase tracking-wider mb-5 flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50"
+          >
+            Production Complete → Move to QC / Scan
+            <ChevronRight size={16} strokeWidth={2.5} />
+          </button>
+        </>
+      )}
+
+      {/* ── QC: Scanning + Finisher ── */}
+      {run.status === "QC" && (
+        <>
+          {/* Finisher */}
+          <div className="bg-card border border-border rounded-xl p-5 mb-5">
+            <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-3">Quality Check</p>
+            <div className="mb-4">
+              <label className="block text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-1.5">
+                Finisher Name
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={finisherNameInput}
+                  onChange={(e) => setFinisherNameInput(e.target.value)}
+                  placeholder="Enter finisher name…"
+                  className="flex-1 px-3 py-2 rounded-lg bg-secondary border border-border text-[12px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-foreground/30"
+                />
+                {finisherNameInput !== run.finisherName && (
+                  <button
+                    onClick={handleSaveFinisher}
+                    disabled={isPending || savingFinisher}
+                    className="px-3 py-2 rounded-lg bg-foreground text-background text-[11px] font-bold disabled:opacity-50"
+                  >
+                    Save
+                  </button>
+                )}
+              </div>
+            </div>
+            {run.finishedDate && (
+              <div>
+                <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-0.5">Finished Date</p>
+                <p className="text-[12px] text-foreground">{formatDate(run.finishedDate)}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Scanning */}
+          <div className="bg-card border-2 border-foreground/20 rounded-xl p-5 mb-5">
+            <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-3">Scanning</p>
+
+            {/* Progress */}
+            <div className="flex items-end gap-3 mb-3">
+              <p className="text-[32px] font-bold tabular-nums leading-none text-foreground">{run.unitsProduced}</p>
+              <p className="text-[16px] text-muted-foreground mb-1">/ {run.quantity} units</p>
+            </div>
+            <div className="h-2 bg-secondary rounded-full overflow-hidden mb-4">
+              <div
+                className="h-full rounded-full bg-badge-purple-text transition-all"
+                style={{ width: `${run.quantity > 0 ? (run.unitsProduced / run.quantity) * 100 : 0}%` }}
+              />
+            </div>
+
+            {/* Batch scan */}
+            <div className="bg-foreground rounded-xl p-4 mb-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Package size={18} className="text-background" strokeWidth={1.5} />
+                  <div>
+                    <p className="text-[12px] font-bold text-background">Batch Scan</p>
+                    <p className="text-[10px] text-background/70">One QR tag for the entire run</p>
+                  </div>
+                </div>
                 {run.batchQrCode ? (
-                  <>
-                    <p className="text-[11px] font-mono-brand text-foreground mb-2 break-all">{run.batchQrCode}</p>
-                    <img src={`/api/qr/generate?data=${encodeURIComponent(run.batchQrCode)}`} alt="Batch QR" className="w-24 h-24 bg-white rounded-lg p-1" />
-                  </>
+                  <span className="px-3 py-1.5 rounded-lg bg-background/20 text-background text-[10px] font-bold uppercase tracking-wider">
+                    Generated ✓
+                  </span>
                 ) : (
                   <button
                     onClick={() => handleGenerateBatchTag("qr")}
                     disabled={isPending}
-                    className="text-[10px] text-primary hover:underline disabled:opacity-50"
+                    className="px-3 py-1.5 rounded-lg bg-background text-foreground text-[10px] font-bold uppercase tracking-wider disabled:opacity-50"
                   >
-                    Generate QR Code
+                    {isPending ? "Generating…" : "Generate QR"}
                   </button>
                 )}
               </div>
-              <div className="bg-secondary/30 rounded-lg p-4">
-                <p className="text-[9px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1">Batch NFC Tag</p>
-                {run.batchNfcTag ? (
-                  <p className="text-[11px] font-mono-brand text-foreground break-all">{run.batchNfcTag}</p>
-                ) : (
-                  <button
-                    onClick={() => handleGenerateBatchTag("nfc")}
-                    disabled={isPending}
-                    className="text-[10px] text-primary hover:underline disabled:opacity-50"
-                  >
-                    Generate NFC Tag
-                  </button>
-                )}
+              {run.batchQrCode && (
+                <div className="mt-3 pt-3 border-t border-background/20 flex items-center gap-3">
+                  <img
+                    src={`/api/qr/generate?data=${encodeURIComponent(run.batchQrCode)}`}
+                    alt="Batch QR"
+                    className="w-14 h-14 bg-white rounded-lg p-1 shrink-0"
+                  />
+                  <p className="text-[10px] font-mono text-background/70 break-all">{run.batchQrCode.slice(0, 40)}…</p>
+                </div>
+              )}
+            </div>
+
+            {/* Individual scan */}
+            <div className="border border-border rounded-xl p-4 mb-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <ScanLine size={18} className="text-foreground" strokeWidth={1.5} />
+                  <div>
+                    <p className="text-[12px] font-bold text-foreground">Scan Individual Garments</p>
+                    <p className="text-[10px] text-muted-foreground">{run.unitsProduced}/{run.quantity} scanned</p>
+                  </div>
+                </div>
+                <Link
+                  href={`/production-runs/${run.id}/scan`}
+                  className="px-3 py-1.5 rounded-lg border border-border text-[10px] font-bold uppercase tracking-wider text-foreground hover:bg-secondary transition-colors"
+                >
+                  Open Scanner
+                </Link>
               </div>
+            </div>
+
+            {/* Complete scanning → ship */}
+            <button
+              onClick={() => handleStatusAdvance("SHIPPED")}
+              disabled={isPending || !allowedStatuses.includes("SHIPPED")}
+              className="w-full py-3 rounded-xl bg-badge-sky-text text-white text-[12px] font-bold uppercase tracking-wider flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50"
+            >
+              Scanning Complete → Move to Shipping
+              <ChevronRight size={14} strokeWidth={2.5} />
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* ── SHIPPED ── */}
+      {run.status === "SHIPPED" && (
+        <div className="bg-card border border-border rounded-xl p-5 mb-5">
+          <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-3">Shipping</p>
+          <div className="grid grid-cols-2 gap-4 mb-4">
+            <div>
+              <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-0.5">Finisher</p>
+              <p className="text-[13px] font-semibold text-foreground">{run.finisherName || "—"}</p>
+            </div>
+            <div>
+              <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-0.5">Finished Date</p>
+              <p className="text-[13px] font-semibold text-foreground">{formatDate(run.finishedDate)}</p>
+            </div>
+            <div>
+              <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-0.5">Expected Ex-Factory</p>
+              <p className="text-[13px] font-semibold text-foreground">{formatDate(run.expectedExFactory)}</p>
+            </div>
+            <div>
+              <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-0.5">Units</p>
+              <p className="text-[20px] font-bold tabular-nums text-foreground">{run.quantity.toLocaleString()}</p>
             </div>
           </div>
-        )}
-      </div>
-
-      {/* Manufacturing Config */}
-      <div className="bg-card border border-border rounded-xl p-6 mb-6">
-        <h3 className="text-[11px] font-bold uppercase tracking-wider text-foreground mb-4">Manufacturing Configuration</h3>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          {[
-            { label: "Washing Program", value: run.washingProgram },
-            { label: "Temperature", value: run.washingTemperature != null ? `${run.washingTemperature}°C` : null },
-            { label: "Finishing", value: run.finishingProcess },
-            { label: "Machine Gauge", value: run.machineGauge },
-            { label: "Knitwear Ply", value: run.knitwearPly },
-            { label: "Finisher", value: run.finisherName },
-            { label: "Finished Date", value: formatDate(run.finishedDate) },
-            { label: "Supplier", value: run.supplier?.name },
-            { label: "Start Date", value: formatDate(run.startDate) },
-            { label: "Expected", value: formatDate(run.expectedCompletion) },
-          ].map(({ label, value }) => (
-            <div key={label}>
-              <p className="text-[9px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1">{label}</p>
-              <p className="text-[12px] text-foreground">{value || "—"}</p>
-            </div>
-          ))}
+          {role === "ADMIN" && (
+            <button
+              onClick={() => handleStatusAdvance("RECEIVED")}
+              disabled={isPending}
+              className="w-full py-3 rounded-xl bg-badge-blue-text text-white text-[12px] font-bold uppercase tracking-wider flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50"
+            >
+              Confirm Goods Received
+              <ChevronRight size={14} strokeWidth={2.5} />
+            </button>
+          )}
+          {role !== "ADMIN" && (
+            <p className="text-[11px] text-muted-foreground text-center">Awaiting receipt confirmation from admin</p>
+          )}
         </div>
-      </div>
+      )}
 
-      {/* Yarn composition */}
-      {run.yarnCompositions.length > 0 && (
-        <div className="bg-card border border-border rounded-xl p-6 mb-6">
-          <h3 className="text-[11px] font-bold uppercase tracking-wider text-foreground mb-4">Yarn Composition</h3>
-          <div className="space-y-2">
-            {run.yarnCompositions.map((y) => (
-              <div key={y.id} className="flex items-center gap-3">
-                <span className="text-[12px] text-foreground flex-1">{y.yarnType}</span>
-                <div className="w-32 h-3 bg-muted rounded-full overflow-hidden">
-                  <div className="h-full rounded-full" style={{ width: `${y.percentage}%`, backgroundColor: "hsl(271 76% 53%)" }} />
+      {/* ── RECEIVED / COMPLETED ── */}
+      {(run.status === "RECEIVED" || run.status === "COMPLETED") && (
+        <div className="bg-card border border-border rounded-xl p-5 mb-5">
+          <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-3">
+            {run.status === "COMPLETED" ? "Completed" : "Received"}
+          </p>
+          <div className="grid grid-cols-2 gap-4 mb-4">
+            <div>
+              <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-0.5">Units</p>
+              <p className="text-[20px] font-bold tabular-nums text-foreground">{run.quantity.toLocaleString()}</p>
+            </div>
+            <div>
+              <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-0.5">Tagged</p>
+              <p className="text-[20px] font-bold tabular-nums text-badge-green-text">{run._count.garments}</p>
+            </div>
+          </div>
+          {run.status === "RECEIVED" && role === "ADMIN" && (
+            <button
+              onClick={() => handleStatusAdvance("COMPLETED")}
+              disabled={isPending}
+              className="w-full py-3 rounded-xl bg-foreground text-background text-[12px] font-bold uppercase tracking-wider flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50"
+            >
+              Mark Completed
+              <ChevronRight size={14} strokeWidth={2.5} />
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* ── Size Breakdown Table (always) ── */}
+      {run.sizeBreakdown.length > 0 && (
+        <div className="bg-card border border-border rounded-xl overflow-hidden mb-5">
+          <div className="px-5 py-3 border-b border-border">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-foreground">Size Breakdown</p>
+          </div>
+          <table className="w-full text-[12px]">
+            <thead className="bg-secondary/30">
+              <tr>
+                <th className="text-left px-4 py-2.5 text-[9px] font-mono uppercase tracking-wider text-muted-foreground">Colour</th>
+                <th className="text-left px-3 py-2.5 text-[9px] font-mono uppercase tracking-wider text-muted-foreground">Size</th>
+                <th className="text-right px-4 py-2.5 text-[9px] font-mono uppercase tracking-wider text-muted-foreground">Ordered</th>
+                {run.status !== "PLANNED" && (
+                  <th className="text-right px-4 py-2.5 text-[9px] font-mono uppercase tracking-wider text-muted-foreground">Produced</th>
+                )}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {run.sizeBreakdown.map((sb) => {
+                const color = sb.orderLineId ? lineToColor.get(sb.orderLineId) : null;
+                return (
+                  <tr key={sb.id}>
+                    <td className="px-4 py-2.5">
+                      {color ? (
+                        <div className="flex items-center gap-1.5">
+                          <ColorSwatch hexValue={color.hexValue} name={color.name} size="sm" />
+                          <span className="text-muted-foreground">{color.name}</span>
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2.5 font-semibold text-foreground">{sb.size}</td>
+                    <td className="px-4 py-2.5 font-mono tabular-nums text-right text-foreground">{sb.quantity}</td>
+                    {run.status !== "PLANNED" && (
+                      <td className="px-4 py-2.5 font-mono tabular-nums text-right text-foreground">{sb.produced}</td>
+                    )}
+                  </tr>
+                );
+              })}
+              <tr className="bg-secondary/20 font-bold">
+                <td className="px-4 py-2.5 text-foreground" colSpan={2}>Total</td>
+                <td className="px-4 py-2.5 font-mono tabular-nums text-right text-foreground">
+                  {run.sizeBreakdown.reduce((s, sb) => s + sb.quantity, 0)}
+                </td>
+                {run.status !== "PLANNED" && (
+                  <td className="px-4 py-2.5 font-mono tabular-nums text-right text-foreground">
+                    {run.sizeBreakdown.reduce((s, sb) => s + sb.produced, 0)}
+                  </td>
+                )}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* ── Manufacturing details (shown from IN_PRODUCTION onward, collapsed) ── */}
+      {["QC", "SHIPPED", "RECEIVED", "COMPLETED"].includes(run.status) && (run.yarnColourCode || run.machineGauge || run.washingProgram) && (
+        <div className="bg-card border border-border rounded-xl p-5 mb-5">
+          <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-3">Manufacturing</p>
+          <div className="grid grid-cols-2 gap-x-6 gap-y-2">
+            {[
+              { label: "Yarn Stock", value: run.yarnColourCode },
+              { label: "Machine Gauge", value: run.machineGauge },
+              { label: "Knitwear Ply", value: run.knitwearPly },
+              { label: "Stitch Type", value: run.stitchType },
+              { label: "Washing Program", value: run.washingProgram },
+              { label: "Temperature", value: run.washingTemperature != null ? `${run.washingTemperature}°C` : null },
+            ]
+              .filter(({ value }) => value)
+              .map(({ label, value }) => (
+                <div key={label}>
+                  <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-0.5">{label}</p>
+                  <p className="text-[12px] text-foreground">{value}</p>
                 </div>
-                <span className="text-[12px] font-mono-brand font-bold tabular-nums w-12 text-right">{y.percentage}%</span>
-              </div>
-            ))}
+              ))}
           </div>
         </div>
       )}
 
-      {/* Garments in this run */}
-      <div className="bg-card border border-border rounded-xl p-6">
-        <h3 className="text-[11px] font-bold uppercase tracking-wider text-foreground mb-4">
-          Garments ({run._count.garments})
-        </h3>
-        {run.garments.length > 0 ? (
-          <div className="space-y-1">
-            {run.garments.map((g) => (
-              <Link
-                key={g.id}
-                href={`/garments/${g.id}`}
-                className="flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-secondary/30 transition-colors"
+      {/* ── Garments (shown in QC+) ── */}
+      {["QC", "SHIPPED", "RECEIVED", "COMPLETED"].includes(run.status) && (
+        <div className="bg-card border border-border rounded-xl p-5 mb-5">
+          <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-3">
+            Garments ({run._count.garments})
+          </p>
+          {run.garments.length > 0 ? (
+            <div className="space-y-1">
+              {run.garments.map((g) => (
+                <Link
+                  key={g.id}
+                  href={`/garments/${g.id}`}
+                  className="flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-secondary/30 transition-colors"
+                >
+                  <span className="text-[12px] font-mono text-foreground flex-1">{g.garmentCode}</span>
+                  {g.isTagged ? (
+                    <Badge label="Tagged" bgClass="bg-badge-green-bg" textClass="text-badge-green-text" />
+                  ) : (
+                    <Badge label="Untagged" bgClass="bg-badge-orange-bg" textClass="text-badge-orange-text" />
+                  )}
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <p className="text-[11px] text-muted-foreground">No garments scanned yet.</p>
+          )}
+        </div>
+      )}
+
+      {/* ── "Start Production" modal overlay ── */}
+      {showStartModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center p-4">
+          <div className="bg-card border border-border rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+            {/* Modal header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border sticky top-0 bg-card z-10">
+              <div>
+                <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
+                  Step {startStep} of 2
+                </p>
+                <h2 className="text-[15px] font-bold text-foreground">
+                  {startStep === 1 ? "Select Colours" : "Manufacturing Details"}
+                </h2>
+              </div>
+              <button
+                onClick={() => setShowStartModal(false)}
+                className="text-muted-foreground hover:text-foreground text-[20px] leading-none px-2"
               >
-                <span className="text-[12px] font-mono-brand text-foreground">{g.garmentCode}</span>
-                {g.isTagged ? (
-                  <Badge label="Tagged" bgClass="bg-badge-green-bg" textClass="text-badge-green-text" />
-                ) : (
-                  <Badge label="Untagged" bgClass="bg-badge-orange-bg" textClass="text-badge-orange-text" />
-                )}
-              </Link>
-            ))}
+                ×
+              </button>
+            </div>
+
+            <div className="px-5 py-4">
+              {/* ── Step 1: Colour picker ── */}
+              {startStep === 1 && (
+                <>
+                  {uniqueColors.length > 0 ? (
+                    <>
+                      <p className="text-[11px] text-muted-foreground mb-4">
+                        Which colours do you want to put into production? You can start all at once or run one colour first.
+                      </p>
+
+                      {/* All colours option */}
+                      <button
+                        onClick={() => { setAllColors(true); setSelectedColorIds([]); }}
+                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 mb-3 transition-colors ${
+                          allColors
+                            ? "border-foreground bg-foreground/5"
+                            : "border-border hover:border-foreground/30"
+                        }`}
+                      >
+                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                          allColors ? "border-foreground bg-foreground" : "border-muted-foreground"
+                        }`}>
+                          {allColors && <Check size={12} className="text-background" />}
+                        </div>
+                        <div className="text-left">
+                          <p className="text-[13px] font-bold text-foreground">All Colours</p>
+                          <p className="text-[11px] text-muted-foreground">{run.quantity} units total</p>
+                        </div>
+                      </button>
+
+                      {/* Individual colour options */}
+                      <div className="space-y-2">
+                        {uniqueColors.map((c) => {
+                          const isSelected = !allColors && selectedColorIds.includes(c.colorId);
+                          return (
+                            <button
+                              key={c.colorId}
+                              onClick={() => { setAllColors(false); toggleColor(c.colorId); }}
+                              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-colors ${
+                                isSelected
+                                  ? "border-foreground bg-foreground/5"
+                                  : "border-border hover:border-foreground/30"
+                              }`}
+                            >
+                              <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                                isSelected ? "border-foreground bg-foreground" : "border-muted-foreground"
+                              }`}>
+                                {isSelected && <Check size={12} className="text-background" />}
+                              </div>
+                              <ColorSwatch hexValue={c.hexValue} name={c.name} />
+                              <div className="text-left flex-1">
+                                <p className="text-[13px] font-semibold text-foreground">{c.name}</p>
+                                <p className="text-[11px] text-muted-foreground">{c.quantity} units</p>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </>
+                  ) : (
+                    <p className="text-[11px] text-muted-foreground mb-4">
+                      All colours in this run will go into production together.
+                    </p>
+                  )}
+
+                  <button
+                    onClick={handleStartStep1Next}
+                    disabled={!allColors && selectedColorIds.length === 0}
+                    className="w-full mt-4 py-3 rounded-xl bg-foreground text-background text-[12px] font-bold uppercase tracking-wider disabled:opacity-40 hover:opacity-90 transition-opacity"
+                  >
+                    Next: Manufacturing Details →
+                  </button>
+                </>
+              )}
+
+              {/* ── Step 2: Manufacturing form ── */}
+              {startStep === 2 && (
+                <>
+                  <p className="text-[11px] text-muted-foreground mb-4">
+                    Enter the manufacturing details for this production run.
+                  </p>
+
+                  <div className="space-y-3">
+                    {[
+                      { key: "yarnStock" as const, label: "Yarn Stock", placeholder: "e.g. Suedwolle Lot 6108892", type: "text" },
+                      { key: "machineGauge" as const, label: "Machine Gauge", placeholder: "e.g. 7GG", type: "text" },
+                      { key: "knitwearPly" as const, label: "Knitwear Ply", placeholder: "e.g. 2-ply", type: "text" },
+                      { key: "stitchType" as const, label: "Stitch Type", placeholder: "e.g. Jersey, Rib, Intarsia", type: "text" },
+                      { key: "washingProgram" as const, label: "Washing Program", placeholder: "e.g. Superwash", type: "text" },
+                      { key: "washingTemperature" as const, label: "Temperature (°C)", placeholder: "e.g. 30", type: "number" },
+                      { key: "expectedExFactory" as const, label: "Expected Ex-Factory", placeholder: "", type: "date" },
+                    ].map(({ key, label, placeholder, type }) => (
+                      <div key={key}>
+                        <label className="block text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-1">
+                          {label}
+                        </label>
+                        <input
+                          type={type}
+                          value={mfgForm[key]}
+                          onChange={(e) => handleMfgChange(key, e.target.value)}
+                          placeholder={placeholder}
+                          className="w-full px-3 py-2.5 rounded-lg bg-secondary border border-border text-[12px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-foreground/30"
+                        />
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex gap-2 mt-5">
+                    <button
+                      onClick={() => setStartStep(1)}
+                      className="px-4 py-3 rounded-xl border border-border text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      ← Back
+                    </button>
+                    <button
+                      onClick={handleConfirmStartProduction}
+                      disabled={isPending}
+                      className="flex-1 py-3 rounded-xl bg-foreground text-background text-[12px] font-bold uppercase tracking-wider disabled:opacity-50 hover:opacity-90 transition-opacity"
+                    >
+                      {isPending ? "Starting…" : "Confirm & Start Production →"}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
-        ) : (
-          <p className="text-[11px] text-muted-foreground">No garments yet. Start scanning to add them.</p>
-        )}
-      </div>
-      {role !== "ADMIN" && (
-        <ContextualHelp
-          pageId="run-detail"
-          title="Run Details"
-          steps={[
-            { icon: "📊", text: "This page shows all info about one production run" },
-            { icon: "⏩", text: "Tap a status step at the top to move the run forward" },
-            { icon: "📱", text: "Tap 'Start Scanning' to scan garments into this run" },
-            { icon: "📦", text: "When all garments are scanned, move to 'Ready to Ship'" },
-          ]}
-          tip="You can move a run backwards if you made a mistake — just tap the previous step."
-        />
+        </div>
       )}
     </div>
   );

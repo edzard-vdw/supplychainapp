@@ -62,7 +62,7 @@ export const aiTools = {
         include: { supplier: true, yarnCompositions: true, _count: { select: { garments: true } }, orderLine: { include: { order: { select: { orderRef: true } } } } },
       });
       if (!run) return { error: `Run "${runCode}" not found` };
-      return { runCode: run.runCode, status: run.status, product: run.productName, sku: run.sku, quantity: run.quantity, produced: run.unitsProduced, tagged: run._count.garments, supplier: run.supplier?.name, order: run.orderLine?.order?.orderRef, config: { washing: run.washingProgram, temp: run.washingTemperature, finishing: run.finishingProcess, gauge: run.machineGauge }, yarns: run.yarnCompositions.map((y) => ({ type: y.yarnType, pct: y.percentage })), individualTagging: run.individualTagging };
+      return { runCode: run.runCode, status: run.status, product: run.productName, sku: run.sku, quantity: run.quantity, produced: run.unitsProduced, tagged: run._count.garments, supplier: run.supplier?.name, order: run.orderLine?.order?.orderRef, config: { washing: run.washingProgram, temp: run.washingTemperature, gauge: run.machineGauge, ply: run.knitwearPly, stitch: run.stitchType }, yarns: run.yarnCompositions.map((y) => ({ type: y.yarnType, pct: y.percentage })), individualTagging: run.individualTagging };
     },
   }),
 

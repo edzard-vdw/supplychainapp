@@ -10,7 +10,7 @@ const RunSchema = z.object({
   orderId: z.number().int().optional().nullable(),
   orderLineId: z.number().int().optional().nullable(),
   supplierId: z.number().int().optional().nullable(),
-  status: z.enum(["PLANNED", "IN_PRODUCTION", "QC", "READY_TO_SHIP", "SHIPPED", "RECEIVED", "COMPLETED"]).optional().default("PLANNED"),
+  status: z.enum(["PLANNED", "IN_PRODUCTION", "QC", "SHIPPED", "RECEIVED", "COMPLETED"]).optional().default("PLANNED"),
   quantity: z.number().int().min(0).optional().default(0),
   sku: z.string().optional().nullable(),
   productName: z.string().optional().nullable(),
@@ -21,12 +21,12 @@ const RunSchema = z.object({
   individualTagging: z.boolean().optional().default(false),
   washingProgram: z.string().optional().nullable(),
   washingTemperature: z.number().optional().nullable(),
-  finishingProcess: z.string().optional().nullable(),
-  finisherName: z.string().optional().nullable(),
   machineGauge: z.string().optional().nullable(),
   knitwearPly: z.string().optional().nullable(),
+  stitchType: z.string().optional().nullable(),
+  finisherName: z.string().optional().nullable(),
   startDate: z.string().optional().nullable(),
-  expectedCompletion: z.string().optional().nullable(),
+  expectedExFactory: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
 });
 
@@ -48,7 +48,7 @@ export async function getProductionRun(id: number) {
   return prisma.productionRun.findUnique({
     where: { id },
     include: {
-      order: { select: { orderRef: true } },
+      order: { select: { id: true, orderRef: true, client: true, dueDate: true } },
       orderLine: { include: { order: true, color: true } },
       sizeBreakdown: { orderBy: { size: "asc" } },
       yarnCompositions: true,
@@ -107,7 +107,7 @@ export async function createProductionRun(
         runCode,
         quantity: totalQty,
         startDate: parsed.startDate ? new Date(parsed.startDate) : null,
-        expectedCompletion: parsed.expectedCompletion ? new Date(parsed.expectedCompletion) : null,
+        expectedExFactory: parsed.expectedExFactory ? new Date(parsed.expectedExFactory) : null,
         yarnCompositions: yarns && yarns.length > 0 ? { create: yarns } : undefined,
         sizeBreakdown: sizes && sizes.length > 0 ? {
           create: sizes.map((s) => ({
@@ -130,7 +130,7 @@ export async function createProductionRun(
 export async function updateProductionRun(id: number, data: Record<string, unknown>) {
   try {
     if (data.startDate && typeof data.startDate === "string") data.startDate = new Date(data.startDate as string);
-    if (data.expectedCompletion && typeof data.expectedCompletion === "string") data.expectedCompletion = new Date(data.expectedCompletion as string);
+    if (data.expectedExFactory && typeof data.expectedExFactory === "string") data.expectedExFactory = new Date(data.expectedExFactory as string);
     if (data.actualCompletion && typeof data.actualCompletion === "string") data.actualCompletion = new Date(data.actualCompletion as string);
     if (data.finishedDate && typeof data.finishedDate === "string") data.finishedDate = new Date(data.finishedDate as string);
 
@@ -315,6 +315,121 @@ export async function generateBatchTag(runId: number, type: "qr" | "nfc", tagVal
     return { success: true, data: { type, value } };
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Failed to generate tag";
+    return { success: false, error: message };
+  }
+}
+
+/**
+ * Start production for a planned run.
+ * If selectedColorIds is null → move entire run to IN_PRODUCTION.
+ * If specific colors → create a new IN_PRODUCTION run for those colors; keep original PLANNED with remainder.
+ */
+export async function startProduction(
+  runId: number,
+  data: {
+    selectedColorIds: number[] | null; // null = all colors
+    yarnStock: string | null;
+    machineGauge: string | null;
+    knitwearPly: string | null;
+    stitchType: string | null;
+    washingProgram: string | null;
+    washingTemperature: number | null;
+    expectedExFactory: string | null;
+  }
+): Promise<{ success: boolean; runId?: number; error?: string }> {
+  try {
+    const run = await prisma.productionRun.findUnique({
+      where: { id: runId },
+      include: { sizeBreakdown: true },
+    });
+    if (!run) return { success: false, error: "Run not found" };
+    if (run.status !== "PLANNED") return { success: false, error: "Run is not in PLANNED state" };
+
+    const manufacturingData = {
+      yarnColourCode: data.yarnStock ?? null,
+      machineGauge: data.machineGauge ?? null,
+      knitwearPly: data.knitwearPly ?? null,
+      stitchType: data.stitchType ?? null,
+      washingProgram: data.washingProgram ?? null,
+      washingTemperature: data.washingTemperature ?? null,
+      expectedExFactory: data.expectedExFactory ? new Date(data.expectedExFactory) : null,
+      startDate: new Date(),
+      status: "IN_PRODUCTION" as const,
+    };
+
+    // If all colors → just update the current run
+    if (!data.selectedColorIds) {
+      await prisma.productionRun.update({ where: { id: runId }, data: manufacturingData });
+      revalidatePath("/production-runs");
+      return { success: true, runId };
+    }
+
+    // Specific colors → split the run
+    // Fetch orderLine colors for each sizeBreakdown
+    const orderLineIds = run.sizeBreakdown
+      .filter((sb) => sb.orderLineId !== null)
+      .map((sb) => sb.orderLineId!);
+
+    const orderLines = await prisma.orderLine.findMany({
+      where: { id: { in: orderLineIds } },
+      select: { id: true, colorId: true },
+    });
+
+    const lineColorMap = new Map(orderLines.map((l) => [l.id, l.colorId]));
+
+    const selectedBreakdowns = run.sizeBreakdown.filter((sb) => {
+      const colorId = sb.orderLineId ? lineColorMap.get(sb.orderLineId) : null;
+      return colorId !== null && colorId !== undefined && data.selectedColorIds!.includes(colorId);
+    });
+    const remainingBreakdowns = run.sizeBreakdown.filter((sb) => {
+      const colorId = sb.orderLineId ? lineColorMap.get(sb.orderLineId) : null;
+      return !colorId || !data.selectedColorIds!.includes(colorId);
+    });
+
+    if (selectedBreakdowns.length === 0) {
+      return { success: false, error: "No breakdowns found for selected colors" };
+    }
+
+    // Create new IN_PRODUCTION run for selected colors
+    const newRunCode = await generateRunCode();
+    const newQuantity = selectedBreakdowns.reduce((s, sb) => s + sb.quantity, 0);
+
+    const newRun = await prisma.productionRun.create({
+      data: {
+        runCode: newRunCode,
+        orderId: run.orderId,
+        orderLineId: run.orderLineId,
+        supplierId: run.supplierId,
+        productName: run.productName,
+        quantity: newQuantity,
+        ...manufacturingData,
+        sizeBreakdown: {
+          create: selectedBreakdowns.map((sb) => ({
+            size: sb.size,
+            sku: sb.sku,
+            quantity: sb.quantity,
+            produced: sb.produced,
+            orderLineId: sb.orderLineId,
+          })),
+        },
+      },
+    });
+
+    // Remove moved breakdowns from original; update original quantity
+    await prisma.$transaction([
+      prisma.runSizeBreakdown.deleteMany({
+        where: { id: { in: selectedBreakdowns.map((sb) => sb.id) } },
+      }),
+      prisma.productionRun.update({
+        where: { id: runId },
+        data: { quantity: remainingBreakdowns.reduce((s, sb) => s + sb.quantity, 0) },
+      }),
+    ]);
+
+    revalidatePath("/production-runs");
+    return { success: true, runId: newRun.id };
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to start production";
     return { success: false, error: message };
   }
 }

@@ -164,8 +164,7 @@ export async function acceptJobAndCreateRun(orderId: number): Promise<{ success:
           status: "PLANNED",
           quantity: totalQty,
           productName,
-          startDate: new Date().toISOString(),
-          // Create size breakdowns from order lines
+          // startDate is set automatically when moved to IN_PRODUCTION
           sizeBreakdown: {
             create: order.orderLines.map((line) => ({
               orderLineId: line.id,

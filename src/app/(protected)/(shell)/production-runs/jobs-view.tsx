@@ -29,20 +29,19 @@ type ActiveRun = {
   _count: { garments: number };
 };
 
-const STATUS_ORDER = ["PLANNED", "IN_PRODUCTION", "QC", "READY_TO_SHIP", "SHIPPED"];
+const STATUS_ORDER = ["PLANNED", "IN_PRODUCTION", "QC", "SHIPPED"];
 
 const STATUS_STYLE: Record<string, { bg: string; text: string; dot: string }> = {
-  PLANNED:       { bg: "bg-muted/50",              text: "text-muted-foreground",   dot: "bg-muted-foreground" },
-  IN_PRODUCTION: { bg: "bg-badge-blue-bg",          text: "text-badge-blue-text",    dot: "bg-badge-blue-text" },
-  QC:            { bg: "bg-badge-purple-bg",        text: "text-badge-purple-text",  dot: "bg-badge-purple-text" },
-  READY_TO_SHIP: { bg: "bg-badge-orange-bg",        text: "text-badge-orange-text",  dot: "bg-badge-orange-text" },
-  SHIPPED:       { bg: "bg-badge-green-bg",         text: "text-badge-green-text",   dot: "bg-badge-green-text" },
+  PLANNED:       { bg: "bg-muted/50",        text: "text-muted-foreground",   dot: "bg-muted-foreground" },
+  IN_PRODUCTION: { bg: "bg-badge-orange-bg", text: "text-badge-orange-text",  dot: "bg-badge-orange-text" },
+  QC:            { bg: "bg-badge-purple-bg", text: "text-badge-purple-text",  dot: "bg-badge-purple-text" },
+  SHIPPED:       { bg: "bg-badge-sky-bg",    text: "text-badge-sky-text",     dot: "bg-badge-sky-text" },
 };
 
 function RunCard({ run }: { run: ActiveRun }) {
   const style = STATUS_STYLE[run.status] ?? STATUS_STYLE.PLANNED;
   const pct = run.quantity > 0 ? Math.round((run.unitsProduced / run.quantity) * 100) : 0;
-  const canScan = run.status === "IN_PRODUCTION";
+  const canScan = run.status === "QC";
   const display = RUN_STATUS_DISPLAY[run.status];
 
   return (
@@ -94,7 +93,10 @@ function RunCard({ run }: { run: ActiveRun }) {
             {canScan ? "Start Scanning" : "Start Scanning"}
           </div>
           {!canScan && run.status === "PLANNED" && (
-            <span className="text-[10px] text-muted-foreground">Mark as In Production first</span>
+            <span className="text-[10px] text-muted-foreground">Start production first</span>
+          )}
+          {!canScan && run.status === "IN_PRODUCTION" && (
+            <span className="text-[10px] text-muted-foreground">Move to QC to scan</span>
           )}
           <ChevronRight size={14} className="text-muted-foreground" />
         </div>

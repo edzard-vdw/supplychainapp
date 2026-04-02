@@ -50,8 +50,7 @@ export const RUN_STATUS_DISPLAY: Record<string, { label: string; bgClass: string
   PLANNED: { label: "Planned", bgClass: "bg-badge-gray-bg", textClass: "text-badge-gray-text" },
   IN_PRODUCTION: { label: "In Production", bgClass: "bg-badge-orange-bg", textClass: "text-badge-orange-text" },
   QC: { label: "Quality Check", bgClass: "bg-badge-purple-bg", textClass: "text-badge-purple-text" },
-  READY_TO_SHIP: { label: "Ready to Ship", bgClass: "bg-badge-emerald-bg", textClass: "text-badge-emerald-text" },
-  SHIPPED: { label: "Shipped", bgClass: "bg-badge-sky-bg", textClass: "text-badge-sky-text" },
+  SHIPPED: { label: "Shipping", bgClass: "bg-badge-sky-bg", textClass: "text-badge-sky-text" },
   RECEIVED: { label: "Received", bgClass: "bg-badge-blue-bg", textClass: "text-badge-blue-text" },
   COMPLETED: { label: "Completed", bgClass: "bg-badge-green-bg", textClass: "text-badge-green-text" },
 };
@@ -63,18 +62,16 @@ export const RUN_STATUS_ORDER = [
   "PLANNED",
   "IN_PRODUCTION",
   "QC",
-  "READY_TO_SHIP",
   "SHIPPED",
   "RECEIVED",
   "COMPLETED",
 ] as const;
 
-// Supplier pipeline — only stages they control
+// Supplier pipeline — stages they control
 export const SUPPLIER_RUN_STATUS_ORDER = [
   "PLANNED",
   "IN_PRODUCTION",
   "QC",
-  "READY_TO_SHIP",
   "SHIPPED",
 ] as const;
 
@@ -83,23 +80,13 @@ export function getRunStatusOrder(role: string) {
 }
 
 // Who can transition to which status
-// ADMIN can set any status (forward or backward)
-// SUPPLIER can move forward or backward within their range (up to SHIPPED)
 export function getAllowedTransitions(currentStatus: string, role: string): string[] {
   const currentIdx = RUN_STATUS_ORDER.indexOf(currentStatus as typeof RUN_STATUS_ORDER[number]);
   if (currentIdx === -1) return [];
-
-  if (role === "ADMIN") {
-    // Admin can move to any status
-    return [...RUN_STATUS_ORDER];
-  }
-
-  // Supplier can move forward or backward up to SHIPPED
+  if (role === "ADMIN") return [...RUN_STATUS_ORDER];
   const supplierMax = RUN_STATUS_ORDER.indexOf("SHIPPED");
   const allowed: string[] = [];
-  for (let i = 0; i <= supplierMax; i++) {
-    allowed.push(RUN_STATUS_ORDER[i]);
-  }
+  for (let i = 0; i <= supplierMax; i++) allowed.push(RUN_STATUS_ORDER[i]);
   return allowed;
 }
 

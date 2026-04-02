@@ -356,7 +356,6 @@ enum RunStatus {
   PLANNED
   IN_PRODUCTION
   QC
-  READY_TO_SHIP
   SHIPPED
   RECEIVED
   COMPLETED
@@ -389,19 +388,19 @@ model ProductionRun {
   batchNfcTag        String?   @map("batch_nfc_tag")          // NFC for entire run (bulk mode)
   batchQrCode        String?   @map("batch_qr_code")          // QR for entire run (bulk mode)
 
-  // Manufacturing config
+  // Manufacturing config (entered when moving to IN_PRODUCTION)
   washingProgram     String?   @map("washing_program")
   washingTemperature Float?    @map("washing_temperature")
-  finishingProcess   String?   @map("finishing_process")
   machineGauge       String?   @map("machine_gauge")
   knitwearPly        String?   @map("knitwear_ply")
+  stitchType         String?   @map("stitch_type")
 
-  // Finisher info (set per run, not per garment)
+  // Finisher info (entered at QC/Scan stage)
   finisherName       String?   @map("finisher_name")
   finishedDate       DateTime? @map("finished_date")
 
-  startDate          DateTime? @map("start_date")
-  expectedCompletion DateTime? @map("expected_completion")
+  startDate          DateTime? @map("start_date")             // auto-set when moving to IN_PRODUCTION
+  expectedExFactory  DateTime? @map("expected_ex_factory")    // replaces expectedCompletion
   actualCompletion   DateTime? @map("actual_completion")
   notes              String?   @db.Text
 

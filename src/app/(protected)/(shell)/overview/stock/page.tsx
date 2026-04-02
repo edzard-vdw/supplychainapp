@@ -31,7 +31,7 @@ export default async function StockPage() {
     }),
     // Active production runs
     prisma.productionRun.findMany({
-      where: { status: { in: ["IN_PRODUCTION", "QC", "READY_TO_SHIP"] } },
+      where: { status: { in: ["IN_PRODUCTION", "QC", "SHIPPED"] } },
       select: {
         runCode: true,
         status: true,

@@ -164,6 +164,7 @@ export async function acceptJobAndCreateRun(orderId: number): Promise<{ success:
           status: "PLANNED",
           quantity: totalQty,
           productName,
+          individualTagging: true,
           // startDate is set automatically when moved to IN_PRODUCTION
           sizeBreakdown: {
             create: order.orderLines.map((line) => ({

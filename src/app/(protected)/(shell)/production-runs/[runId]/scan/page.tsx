@@ -31,6 +31,9 @@ export default function RunScanPage() {
   const [manualInput, setManualInput] = useState("");
   const [scanHistory, setScanHistory] = useState<ScanEntry[]>([]);
   const [runCode, setRunCode] = useState("");
+  const [finisherName, setFinisherName] = useState("");
+  const [editingFinisher, setEditingFinisher] = useState(false);
+  const [finisherDraft, setFinisherDraft] = useState("");
 
   // Load run sizes on mount
   useEffect(() => {
@@ -38,6 +41,10 @@ export default function RunScanPage() {
       import("@/lib/actions/production-runs").then(({ getProductionRun }) => {
         getProductionRun(runId).then((run) => {
           if (run?.runCode) setRunCode(run.runCode);
+          if (run?.finisherName) {
+            setFinisherName(run.finisherName);
+            setFinisherDraft(run.finisherName);
+          }
           if (run?.sizeBreakdown && run.sizeBreakdown.length > 0) {
             setSizes(run.sizeBreakdown.map((sb) => ({ id: sb.id, size: sb.size, quantity: sb.quantity, produced: sb.produced })));
             // Auto-select first size with remaining capacity
@@ -182,6 +189,36 @@ export default function RunScanPage() {
         <div className="flex-1 min-w-0">
           <p className="text-[10px] font-mono-brand uppercase tracking-widest text-muted-foreground">Scan Garment — Step {scanStep === "qr" ? "1" : "2"} of 2</p>
           <p className="text-[12px] font-bold text-foreground">{runCode || `Run #${runId}`}</p>
+          {finisherName ? (
+            editingFinisher ? (
+              <div className="flex items-center gap-1 mt-0.5">
+                <input
+                  value={finisherDraft}
+                  onChange={(e) => setFinisherDraft(e.target.value)}
+                  className="flex-1 px-2 py-0.5 text-[10px] bg-secondary border border-border rounded text-foreground focus:outline-none"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      setFinisherName(finisherDraft);
+                      setEditingFinisher(false);
+                      import("@/lib/actions/production-runs").then(({ updateProductionRun }) => {
+                        updateProductionRun(runId, { finisherName: finisherDraft });
+                      });
+                    }
+                    if (e.key === "Escape") setEditingFinisher(false);
+                  }}
+                  autoFocus
+                />
+                <button onClick={() => { setFinisherName(finisherDraft); setEditingFinisher(false); import("@/lib/actions/production-runs").then(({ updateProductionRun }) => { updateProductionRun(runId, { finisherName: finisherDraft }); }); }} className="text-[9px] text-badge-green-text font-bold">✓</button>
+              </div>
+            ) : (
+              <p className="text-[10px] text-muted-foreground mt-0.5">
+                Scanning: <span className="font-semibold text-foreground">{finisherName}</span>
+                <button onClick={() => { setFinisherDraft(finisherName); setEditingFinisher(true); }} className="ml-1.5 text-[9px] text-muted-foreground hover:text-foreground underline">Edit</button>
+              </p>
+            )
+          ) : (
+            <p className="text-[10px] text-badge-orange-text font-medium mt-0.5">No finisher set — go back to set one</p>
+          )}
         </div>
         <div className="flex items-center gap-1">
           <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold ${scanStep === "qr" ? "bg-foreground text-background" : capturedQR ? "bg-badge-green-text text-white" : "bg-muted text-muted-foreground"}`}>

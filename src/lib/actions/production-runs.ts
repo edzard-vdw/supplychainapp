@@ -404,6 +404,7 @@ export async function startProduction(
         supplierId: run.supplierId,
         productName: run.productName,
         quantity: newQuantity,
+        individualTagging: true,
         ...manufacturingData,
         sizeBreakdown: {
           create: selectedBreakdowns.map((sb) => ({

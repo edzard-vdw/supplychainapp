@@ -49,10 +49,9 @@ export function isOrderAdminOnly(status: string): boolean {
 export const RUN_STATUS_DISPLAY: Record<string, { label: string; bgClass: string; textClass: string }> = {
   PLANNED: { label: "Planned", bgClass: "bg-badge-gray-bg", textClass: "text-badge-gray-text" },
   IN_PRODUCTION: { label: "In Production", bgClass: "bg-badge-orange-bg", textClass: "text-badge-orange-text" },
-  QC: { label: "Quality Check", bgClass: "bg-badge-purple-bg", textClass: "text-badge-purple-text" },
+  QC: { label: "QC / Scan", bgClass: "bg-badge-purple-bg", textClass: "text-badge-purple-text" },
   SHIPPED: { label: "Shipping", bgClass: "bg-badge-sky-bg", textClass: "text-badge-sky-text" },
-  RECEIVED: { label: "Received", bgClass: "bg-badge-blue-bg", textClass: "text-badge-blue-text" },
-  COMPLETED: { label: "Completed", bgClass: "bg-badge-green-bg", textClass: "text-badge-green-text" },
+  RECEIVED: { label: "Received", bgClass: "bg-badge-green-bg", textClass: "text-badge-green-text" },
 };
 
 // ─── Run status flow ─────────────────────────────────────
@@ -64,7 +63,6 @@ export const RUN_STATUS_ORDER = [
   "QC",
   "SHIPPED",
   "RECEIVED",
-  "COMPLETED",
 ] as const;
 
 // Supplier pipeline — stages they control
@@ -92,7 +90,7 @@ export function getAllowedTransitions(currentStatus: string, role: string): stri
 
 // Whether a status is a "supplier" status or "admin" status
 export function isAdminOnlyStatus(status: string): boolean {
-  return status === "RECEIVED" || status === "COMPLETED";
+  return status === "RECEIVED";
 }
 
 // ─── Formatters ──────────────────────────────────────────

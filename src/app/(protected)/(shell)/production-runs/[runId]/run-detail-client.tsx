@@ -161,6 +161,18 @@ export function RunDetailClient({
   // ── Confirm status change (for backward moves or admin actions) ──
   const [confirmStatus, setConfirmStatus] = useState<string | null>(null);
 
+  // ── Inline ex-factory date edit (IN_PRODUCTION, if not set) ──
+  const [exFactoryInput, setExFactoryInput] = useState(
+    run.expectedExFactory ? run.expectedExFactory.slice(0, 10) : ""
+  );
+  function handleSaveExFactory() {
+    if (!exFactoryInput) return;
+    startTransition(async () => {
+      await updateProductionRun(run.id, { expectedExFactory: exFactoryInput });
+      router.refresh();
+    });
+  }
+
   function handleMfgChange(field: keyof typeof mfgForm, value: string) {
     setMfgForm((prev) => ({ ...prev, [field]: value }));
   }
@@ -213,9 +225,6 @@ export function RunDetailClient({
     if (!allowedStatuses.includes(newStatus)) return;
     startTransition(async () => {
       const updateData: Record<string, unknown> = { status: newStatus };
-      if (newStatus === "COMPLETED") {
-        updateData.actualCompletion = new Date().toISOString();
-      }
       if (newStatus === "SHIPPED" && run.status === "QC") {
         // Auto-set finishedDate when completing QC / moving to SHIPPED
         updateData.finishedDate = new Date().toISOString();
@@ -259,7 +268,7 @@ export function RunDetailClient({
   }, [orderLines]);
 
   return (
-    <div className="px-4 py-6 max-w-[700px] mx-auto">
+    <div className="px-4 py-6 max-w-[700px] mx-auto pb-28">
       {/* ── Header ── */}
       <div className="flex items-center gap-3 mb-6">
         <Link
@@ -410,17 +419,7 @@ export function RunDetailClient({
         )}
       </div>
 
-      {/* ── PLANNED: Start Production CTA ── */}
-      {run.status === "PLANNED" && (
-        <button
-          onClick={openStartModal}
-          disabled={isPending}
-          className="w-full py-4 rounded-xl bg-foreground text-background text-[13px] font-bold uppercase tracking-wider mb-5 flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50"
-        >
-          Start Production
-          <ChevronRight size={16} strokeWidth={2.5} />
-        </button>
-      )}
+      {/* ── PLANNED: CTA moved to sticky bottom bar ── */}
 
       {/* ── IN_PRODUCTION: Manufacturing Details + Progress ── */}
       {run.status === "IN_PRODUCTION" && (
@@ -438,13 +437,34 @@ export function RunDetailClient({
                 { label: "Washing Program", value: run.washingProgram },
                 { label: "Temperature", value: run.washingTemperature != null ? `${run.washingTemperature}°C` : null },
                 { label: "Start Date", value: formatDate(run.startDate) },
-                { label: "Expected Ex-Factory", value: formatDate(run.expectedExFactory) },
+                ...(run.expectedExFactory ? [{ label: "Expected Ex-Factory", value: formatDate(run.expectedExFactory) }] : []),
               ].map(({ label, value }) => (
                 <div key={label}>
                   <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-0.5">{label}</p>
                   <p className="text-[12px] text-foreground">{value || "—"}</p>
                 </div>
               ))}
+              {/* Inline ex-factory edit if not yet set */}
+              {!run.expectedExFactory && (
+                <div className="col-span-2 mt-1">
+                  <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-1.5">Expected Ex-Factory</p>
+                  <div className="flex gap-2">
+                    <input
+                      type="date"
+                      value={exFactoryInput}
+                      onChange={(e) => setExFactoryInput(e.target.value)}
+                      className="flex-1 px-3 py-2 rounded-lg bg-secondary border border-border text-[12px] text-foreground focus:outline-none focus:ring-1 focus:ring-foreground/30"
+                    />
+                    <button
+                      onClick={handleSaveExFactory}
+                      disabled={!exFactoryInput || isPending}
+                      className="px-3 py-2 rounded-lg bg-foreground text-background text-[11px] font-bold disabled:opacity-40"
+                    >
+                      Set
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -468,37 +488,30 @@ export function RunDetailClient({
             </p>
           </div>
 
-          {/* Move to QC CTA */}
-          <button
-            onClick={() => handleStatusAdvance("QC")}
-            disabled={isPending || !allowedStatuses.includes("QC")}
-            className="w-full py-4 rounded-xl bg-badge-purple-text text-white text-[13px] font-bold uppercase tracking-wider mb-5 flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50"
-          >
-            Production Complete → Move to QC / Scan
-            <ChevronRight size={16} strokeWidth={2.5} />
-          </button>
         </>
       )}
 
-      {/* ── QC: Scanning + Finisher ── */}
+      {/* ── QC: Scanning FIRST, finisher below ── */}
       {run.status === "QC" && (
         <>
-          {/* Finisher */}
-          <div className="bg-card border border-border rounded-xl p-5 mb-5">
-            <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-3">Quality Check</p>
+          {/* Scanning card — PRIMARY, at top */}
+          <div className="bg-card border-2 border-foreground/20 rounded-xl p-5 mb-5">
+            <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-3">QC / Scan</p>
+
+            {/* Who is scanning — finisher name prompt */}
             <div className="mb-4">
               <label className="block text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-1.5">
-                Finisher Name
+                Who is scanning?
               </label>
               <div className="flex gap-2">
                 <input
                   type="text"
                   value={finisherNameInput}
                   onChange={(e) => setFinisherNameInput(e.target.value)}
-                  placeholder="Enter finisher name…"
+                  placeholder="Finisher / operator name…"
                   className="flex-1 px-3 py-2 rounded-lg bg-secondary border border-border text-[12px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-foreground/30"
                 />
-                {finisherNameInput !== run.finisherName && (
+                {finisherNameInput !== run.finisherName && finisherNameInput && (
                   <button
                     onClick={handleSaveFinisher}
                     disabled={isPending || savingFinisher}
@@ -509,22 +522,22 @@ export function RunDetailClient({
                 )}
               </div>
             </div>
-            {run.finishedDate && (
-              <div>
-                <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-0.5">Finished Date</p>
-                <p className="text-[12px] text-foreground">{formatDate(run.finishedDate)}</p>
-              </div>
-            )}
-          </div>
 
-          {/* Scanning */}
-          <div className="bg-card border-2 border-foreground/20 rounded-xl p-5 mb-5">
-            <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-3">Scanning</p>
+            {/* Big scan button */}
+            <Link
+              href={`/production-runs/${run.id}/scan`}
+              className="w-full flex items-center justify-center gap-2 py-4 rounded-xl bg-foreground text-background text-[13px] font-bold uppercase tracking-wider hover:opacity-90 transition-opacity mb-4"
+            >
+              <ScanLine size={18} strokeWidth={2} />
+              Open Scanner
+            </Link>
 
             {/* Progress */}
-            <div className="flex items-end gap-3 mb-3">
-              <p className="text-[32px] font-bold tabular-nums leading-none text-foreground">{run.unitsProduced}</p>
-              <p className="text-[16px] text-muted-foreground mb-1">/ {run.quantity} units</p>
+            <div className="flex items-end gap-3 mb-2">
+              <p className="text-[28px] font-bold tabular-nums leading-none text-foreground">
+                {run.unitsProduced}
+              </p>
+              <p className="text-[14px] text-muted-foreground mb-0.5">/ {run.quantity} units scanned</p>
             </div>
             <div className="h-2 bg-secondary rounded-full overflow-hidden mb-4">
               <div
@@ -533,71 +546,59 @@ export function RunDetailClient({
               />
             </div>
 
-            {/* Batch scan */}
-            <div className="bg-foreground rounded-xl p-4 mb-3">
+            {/* Batch scan — secondary */}
+            <div className="border border-border rounded-xl p-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <Package size={18} className="text-background" strokeWidth={1.5} />
+                  <Package size={16} className="text-muted-foreground" strokeWidth={1.5} />
                   <div>
-                    <p className="text-[12px] font-bold text-background">Batch Scan</p>
-                    <p className="text-[10px] text-background/70">One QR tag for the entire run</p>
+                    <p className="text-[12px] font-bold text-foreground">Batch QR</p>
+                    <p className="text-[10px] text-muted-foreground">One tag for the entire run</p>
                   </div>
                 </div>
                 {run.batchQrCode ? (
-                  <span className="px-3 py-1.5 rounded-lg bg-background/20 text-background text-[10px] font-bold uppercase tracking-wider">
+                  <span className="px-3 py-1.5 rounded-lg bg-badge-green-bg text-badge-green-text text-[10px] font-bold uppercase tracking-wider">
                     Generated ✓
                   </span>
                 ) : (
                   <button
                     onClick={() => handleGenerateBatchTag("qr")}
                     disabled={isPending}
-                    className="px-3 py-1.5 rounded-lg bg-background text-foreground text-[10px] font-bold uppercase tracking-wider disabled:opacity-50"
+                    className="px-3 py-1.5 rounded-lg border border-border text-[10px] font-bold uppercase tracking-wider text-foreground disabled:opacity-50"
                   >
-                    {isPending ? "Generating…" : "Generate QR"}
+                    Generate QR
                   </button>
                 )}
               </div>
               {run.batchQrCode && (
-                <div className="mt-3 pt-3 border-t border-background/20 flex items-center gap-3">
+                <div className="mt-3 pt-3 border-t border-border flex items-center gap-3">
                   <img
                     src={`/api/qr/generate?data=${encodeURIComponent(run.batchQrCode)}`}
                     alt="Batch QR"
-                    className="w-14 h-14 bg-white rounded-lg p-1 shrink-0"
+                    className="w-12 h-12 bg-white rounded-lg p-0.5 shrink-0"
                   />
-                  <p className="text-[10px] font-mono text-background/70 break-all">{run.batchQrCode.slice(0, 40)}…</p>
+                  <p className="text-[10px] font-mono text-muted-foreground break-all">{run.batchQrCode.slice(0, 40)}…</p>
                 </div>
               )}
             </div>
+          </div>
 
-            {/* Individual scan */}
-            <div className="border border-border rounded-xl p-4 mb-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <ScanLine size={18} className="text-foreground" strokeWidth={1.5} />
-                  <div>
-                    <p className="text-[12px] font-bold text-foreground">Scan Individual Garments</p>
-                    <p className="text-[10px] text-muted-foreground">{run.unitsProduced}/{run.quantity} scanned</p>
-                  </div>
+          {/* Finisher summary (if set) */}
+          {run.finishedDate && (
+            <div className="bg-card border border-border rounded-xl p-5 mb-5">
+              <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-2">Scan Record</p>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-0.5">Finisher</p>
+                  <p className="text-[13px] font-semibold text-foreground">{run.finisherName || "—"}</p>
                 </div>
-                <Link
-                  href={`/production-runs/${run.id}/scan`}
-                  className="px-3 py-1.5 rounded-lg border border-border text-[10px] font-bold uppercase tracking-wider text-foreground hover:bg-secondary transition-colors"
-                >
-                  Open Scanner
-                </Link>
+                <div>
+                  <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-0.5">Finished</p>
+                  <p className="text-[13px] font-semibold text-foreground">{formatDate(run.finishedDate)}</p>
+                </div>
               </div>
             </div>
-
-            {/* Complete scanning → ship */}
-            <button
-              onClick={() => handleStatusAdvance("SHIPPED")}
-              disabled={isPending || !allowedStatuses.includes("SHIPPED")}
-              className="w-full py-3 rounded-xl bg-badge-sky-text text-white text-[12px] font-bold uppercase tracking-wider flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50"
-            >
-              Scanning Complete → Move to Shipping
-              <ChevronRight size={14} strokeWidth={2.5} />
-            </button>
-          </div>
+          )}
         </>
       )}
 
@@ -623,28 +624,16 @@ export function RunDetailClient({
               <p className="text-[20px] font-bold tabular-nums text-foreground">{run.quantity.toLocaleString()}</p>
             </div>
           </div>
-          {role === "ADMIN" && (
-            <button
-              onClick={() => handleStatusAdvance("RECEIVED")}
-              disabled={isPending}
-              className="w-full py-3 rounded-xl bg-badge-blue-text text-white text-[12px] font-bold uppercase tracking-wider flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50"
-            >
-              Confirm Goods Received
-              <ChevronRight size={14} strokeWidth={2.5} />
-            </button>
-          )}
           {role !== "ADMIN" && (
             <p className="text-[11px] text-muted-foreground text-center">Awaiting receipt confirmation from admin</p>
           )}
         </div>
       )}
 
-      {/* ── RECEIVED / COMPLETED ── */}
+      {/* ── RECEIVED ── */}
       {(run.status === "RECEIVED" || run.status === "COMPLETED") && (
         <div className="bg-card border border-border rounded-xl p-5 mb-5">
-          <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-3">
-            {run.status === "COMPLETED" ? "Completed" : "Received"}
-          </p>
+          <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-3">Received</p>
           <div className="grid grid-cols-2 gap-4 mb-4">
             <div>
               <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-0.5">Units</p>
@@ -655,16 +644,6 @@ export function RunDetailClient({
               <p className="text-[20px] font-bold tabular-nums text-badge-green-text">{run._count.garments}</p>
             </div>
           </div>
-          {run.status === "RECEIVED" && role === "ADMIN" && (
-            <button
-              onClick={() => handleStatusAdvance("COMPLETED")}
-              disabled={isPending}
-              className="w-full py-3 rounded-xl bg-foreground text-background text-[12px] font-bold uppercase tracking-wider flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50"
-            >
-              Mark Completed
-              <ChevronRight size={14} strokeWidth={2.5} />
-            </button>
-          )}
         </div>
       )}
 
@@ -725,7 +704,7 @@ export function RunDetailClient({
       )}
 
       {/* ── Manufacturing details (shown from IN_PRODUCTION onward, collapsed) ── */}
-      {["QC", "SHIPPED", "RECEIVED", "COMPLETED"].includes(run.status) && (run.yarnColourCode || run.machineGauge || run.washingProgram) && (
+      {["QC", "SHIPPED", "RECEIVED"].includes(run.status) && (run.yarnColourCode || run.machineGauge || run.washingProgram) && (
         <div className="bg-card border border-border rounded-xl p-5 mb-5">
           <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-3">Manufacturing</p>
           <div className="grid grid-cols-2 gap-x-6 gap-y-2">
@@ -750,7 +729,7 @@ export function RunDetailClient({
       )}
 
       {/* ── Garments (shown in QC+) ── */}
-      {["QC", "SHIPPED", "RECEIVED", "COMPLETED"].includes(run.status) && (
+      {["QC", "SHIPPED", "RECEIVED"].includes(run.status) && (
         <div className="bg-card border border-border rounded-xl p-5 mb-5">
           <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-3">
             Garments ({run._count.garments})
@@ -778,9 +757,56 @@ export function RunDetailClient({
         </div>
       )}
 
+      {/* ── Sticky bottom action bar ── */}
+      {(["PLANNED","IN_PRODUCTION","QC"].includes(run.status) || (run.status === "SHIPPED" && role === "ADMIN")) && (
+        <div className="fixed bottom-0 inset-x-0 z-30 bg-background/95 backdrop-blur border-t border-border px-4 py-3 safe-area-bottom">
+          <div className="max-w-[700px] mx-auto">
+            {run.status === "PLANNED" && (
+              <button
+                onClick={openStartModal}
+                disabled={isPending}
+                className="w-full py-4 rounded-xl bg-foreground text-background text-[13px] font-bold uppercase tracking-wider flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50"
+              >
+                Start Production <ChevronRight size={16} strokeWidth={2.5} />
+              </button>
+            )}
+            {run.status === "IN_PRODUCTION" && allowedStatuses.includes("QC") && (
+              <button
+                onClick={() => handleStatusAdvance("QC")}
+                disabled={isPending}
+                className="w-full py-4 rounded-xl bg-badge-purple-text text-white text-[13px] font-bold uppercase tracking-wider flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50"
+              >
+                {isPending ? "Updating…" : "Production Complete → QC / Scan"}
+                {!isPending && <ChevronRight size={16} strokeWidth={2.5} />}
+              </button>
+            )}
+            {run.status === "QC" && allowedStatuses.includes("SHIPPED") && (
+              <button
+                onClick={() => handleStatusAdvance("SHIPPED")}
+                disabled={isPending}
+                className="w-full py-4 rounded-xl bg-badge-sky-text text-white text-[13px] font-bold uppercase tracking-wider flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50"
+              >
+                {isPending ? "Updating…" : "Scanning Complete → Ship"}
+                {!isPending && <ChevronRight size={16} strokeWidth={2.5} />}
+              </button>
+            )}
+            {run.status === "SHIPPED" && role === "ADMIN" && allowedStatuses.includes("RECEIVED") && (
+              <button
+                onClick={() => handleStatusAdvance("RECEIVED")}
+                disabled={isPending}
+                className="w-full py-4 rounded-xl bg-badge-blue-text text-white text-[13px] font-bold uppercase tracking-wider flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50"
+              >
+                {isPending ? "Updating…" : "Confirm Goods Received"}
+                {!isPending && <ChevronRight size={16} strokeWidth={2.5} />}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ── "Start Production" modal overlay ── */}
       {showStartModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
           <div className="bg-card border border-border rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
             {/* Modal header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-border sticky top-0 bg-card z-10">

@@ -775,11 +775,20 @@ export function RunDetailClient({
             </button>
           );
         } else if (run.status === "QC" && allowedStatuses.includes("SHIPPED")) {
+          const scanned = run._count.garments;
+          const scanComplete = scanned >= run.quantity;
           btn = (
-            <button onClick={() => handleStatusAdvance("SHIPPED")} disabled={isPending}
-              className="w-full py-4 rounded-xl bg-badge-sky-text text-white text-[13px] font-bold uppercase tracking-wider flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50">
-              {isPending ? "Updating…" : <>"Scanning Complete → Ship" <ChevronRight size={16} strokeWidth={2.5} /></>}
-            </button>
+            <div className="w-full space-y-2">
+              {!scanComplete && (
+                <p className="text-center text-[11px] text-badge-orange-text font-medium">
+                  {scanned} / {run.quantity} garments scanned — scan all before shipping
+                </p>
+              )}
+              <button onClick={() => handleStatusAdvance("SHIPPED")} disabled={isPending || !scanComplete}
+                className="w-full py-4 rounded-xl bg-badge-sky-text text-white text-[13px] font-bold uppercase tracking-wider flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50">
+                {isPending ? "Updating…" : <>"Scanning Complete → Ship" <ChevronRight size={16} strokeWidth={2.5} /></>}
+              </button>
+            </div>
           );
         } else if (run.status === "SHIPPED" && role === "ADMIN" && allowedStatuses.includes("RECEIVED")) {
           btn = (

@@ -19,7 +19,7 @@ type RunWithRelations = {
   unitsProduced: number;
   washingProgram: string | null;
   washingTemperature: number | null;
-  finishingProcess: string | null;
+  stitchType: string | null;
   machineGauge: string | null;
   knitwearPly: string | null;
   productName: string | null;
@@ -27,7 +27,7 @@ type RunWithRelations = {
   productColor: string | null;
   sku: string | null;
   startDate: string | null;
-  expectedCompletion: string | null;
+  expectedExFactory: string | null;
   notes: string | null;
   createdAt: string;
   supplier: { id: number; name: string } | null;
@@ -108,7 +108,7 @@ export function ProductionRunsClient({
   const [newIndividualTagging, setNewIndividualTagging] = useState(true);
   const [newWashing, setNewWashing] = useState("");
   const [newTemp, setNewTemp] = useState("");
-  const [newFinishing, setNewFinishing] = useState("");
+  const [newStitchType, setNewStitchType] = useState("");
   const [newFinisherName, setNewFinisherName] = useState("");
   const [newGauge, setNewGauge] = useState("");
   const [newPly, setNewPly] = useState("");
@@ -146,7 +146,7 @@ export function ProductionRunsClient({
     setNewCode("AUTO"); setNewQty(0); setNewSku(""); setNewProductName(""); setNewProductColor("");
     setNewYarnLotId(null); setNewYarnColourCode(""); setNewYarnLotNumber("");
     setNewIndividualTagging(true); setNewWashing(""); setNewTemp("");
-    setNewFinishing(""); setNewFinisherName(""); setNewGauge(""); setNewPly("");
+    setNewStitchType(""); setNewFinisherName(""); setNewGauge(""); setNewPly("");
   }
 
   // Open inline form inside a PO card
@@ -289,7 +289,7 @@ export function ProductionRunsClient({
       individualTagging: newIndividualTagging,
       washingProgram: newWashing || null,
       washingTemperature: newTemp ? parseFloat(newTemp) : null,
-      finishingProcess: newFinishing || null,
+      stitchType: newStitchType || null,
       finisherName: newFinisherName || null,
       machineGauge: newGauge || null,
       knitwearPly: newPly || null,
@@ -428,8 +428,8 @@ export function ProductionRunsClient({
               <input value={newTemp} onChange={(e) => setNewTemp(e.target.value)} className="w-full h-[34px] px-2.5 bg-background border border-border rounded-lg text-[11px] font-mono-brand text-foreground outline-none focus:ring-1 focus:ring-ring text-right" placeholder="30" />
             </div>
             <div>
-              <label className="block text-[8px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1">Finishing</label>
-              <input value={newFinishing} onChange={(e) => setNewFinishing(e.target.value)} className="w-full h-[34px] px-2.5 bg-background border border-border rounded-lg text-[11px] text-foreground outline-none focus:ring-1 focus:ring-ring" placeholder="Steam press" />
+              <label className="block text-[8px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1">Stitch Type</label>
+              <input value={newStitchType} onChange={(e) => setNewStitchType(e.target.value)} className="w-full h-[34px] px-2.5 bg-background border border-border rounded-lg text-[11px] text-foreground outline-none focus:ring-1 focus:ring-ring" placeholder="Plain knit" />
             </div>
             <div>
               <label className="block text-[8px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1">Finisher</label>
@@ -678,8 +678,8 @@ export function ProductionRunsClient({
               <input value={newTemp} onChange={(e) => setNewTemp(e.target.value)} className="w-full h-[38px] px-3 bg-background border border-border rounded-lg text-[12px] font-mono-brand text-foreground outline-none focus:ring-1 focus:ring-ring text-right" placeholder="30" />
             </div>
             <div>
-              <label className="block text-[9px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1.5">Finishing</label>
-              <input value={newFinishing} onChange={(e) => setNewFinishing(e.target.value)} className="w-full h-[38px] px-3 bg-background border border-border rounded-lg text-[12px] text-foreground outline-none focus:ring-1 focus:ring-ring" placeholder="Steam press" />
+              <label className="block text-[9px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1.5">Stitch Type</label>
+              <input value={newStitchType} onChange={(e) => setNewStitchType(e.target.value)} className="w-full h-[38px] px-3 bg-background border border-border rounded-lg text-[12px] text-foreground outline-none focus:ring-1 focus:ring-ring" placeholder="Plain knit" />
             </div>
             <div>
               <label className="block text-[9px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1.5">Finisher</label>
@@ -938,7 +938,7 @@ export function ProductionRunsClient({
                       onDragEnd={() => setDragRunId(null)}
                       className={`bg-background border rounded-lg p-2.5 cursor-grab active:cursor-grabbing hover:border-foreground/20 transition-all ${
                         dragRunId === run.id ? "opacity-50 scale-95" : ""
-                      } ${run.expectedCompletion && new Date(run.expectedCompletion) < new Date() && run.status !== "COMPLETED" && run.status !== "RECEIVED" ? "border-badge-red-text/40 bg-badge-red-bg/10" : "border-border"}`}
+                      } ${run.expectedExFactory && new Date(run.expectedExFactory) < new Date() && run.status !== "COMPLETED" && run.status !== "RECEIVED" ? "border-badge-red-text/40 bg-badge-red-bg/10" : "border-border"}`}
                     >
                       <div className="flex items-center gap-1.5 mb-1.5">
                         <GripVertical size={10} className="text-muted-foreground/40 shrink-0" />
@@ -985,7 +985,7 @@ export function ProductionRunsClient({
                         </div>
                       )}
                       <div className="flex items-center gap-1.5 mt-2">
-                        {["IN_PRODUCTION", "QC", "READY_TO_SHIP", "SHIPPED"].includes(run.status) && (
+                        {run.status === "QC" && (
                           <Link
                             href={`/production-runs/${run.id}/scan`}
                             className="text-[8px] font-bold uppercase tracking-wider px-2 py-0.5 rounded text-white"
@@ -1072,10 +1072,10 @@ export function ProductionRunsClient({
                     {[
                       { label: "Washing", value: run.washingProgram },
                       { label: "Temperature", value: run.washingTemperature != null ? `${run.washingTemperature}°C` : null },
-                      { label: "Finishing", value: run.finishingProcess },
+                      { label: "Stitch Type", value: run.stitchType },
                       { label: "Gauge", value: run.machineGauge },
                       { label: "Start", value: run.startDate ? formatDate(run.startDate) : null },
-                      { label: "Expected", value: run.expectedCompletion ? formatDate(run.expectedCompletion) : null },
+                      { label: "Ex-Factory", value: run.expectedExFactory ? formatDate(run.expectedExFactory) : null },
                       { label: "Produced", value: `${run.unitsProduced} / ${run.quantity}` },
                       { label: "Supplier", value: run.supplier?.name },
                     ].map(({ label, value }) => (

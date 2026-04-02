@@ -265,7 +265,7 @@ export async function scanGarmentIntoRun(runId: number, tagData: {
       });
       if (yarnLine && run.quantity > 0) {
         // Calculate per-garment yarn usage: total yarn / planned quantity
-        const perGarmentKg = (yarnLine.condKg || yarnLine.netKg) / run.quantity;
+        const perGarmentKg = (yarnLine.condKg ?? yarnLine.netKg) / run.quantity;
         if (perGarmentKg > 0) {
           await prisma.yarnDeliveryLine.update({
             where: { id: yarnLine.id },

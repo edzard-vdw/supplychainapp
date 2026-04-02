@@ -126,3 +126,64 @@ export async function deleteOrderLine(id: number) {
     return { success: false, error: message };
   }
 }
+
+// ─── Accept job: acknowledge order + auto-create production run ──────────────
+export async function acceptJobAndCreateRun(orderId: number): Promise<{ success: boolean; runId?: number; error?: string }> {
+  try {
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+      include: { orderLines: true },
+    });
+    if (!order) return { success: false, error: "Order not found" };
+    if (order.status !== "CONFIRMED") return { success: false, error: "Order is not in CONFIRMED state" };
+
+    // Generate unique run code
+    const today = new Date();
+    const dateStr = today.toISOString().slice(0, 10).replace(/-/g, "");
+    const count = await prisma.productionRun.count({
+      where: { runCode: { startsWith: `RUN-${dateStr}` } },
+    });
+    const runCode = `RUN-${dateStr}-${String(count + 1).padStart(3, "0")}`;
+
+    // Derive product summary from first order line
+    const firstLine = order.orderLines[0];
+    const productName = firstLine?.product ?? null;
+    const totalQty = order.orderLines.reduce((s, l) => s + l.quantity, 0);
+
+    // Acknowledge order + create run in a transaction
+    const [, run] = await prisma.$transaction([
+      prisma.order.update({
+        where: { id: orderId },
+        data: { status: "ACKNOWLEDGED" },
+      }),
+      prisma.productionRun.create({
+        data: {
+          runCode,
+          orderId,
+          supplierId: order.supplierId!,
+          status: "PLANNED",
+          quantity: totalQty,
+          productName,
+          startDate: new Date().toISOString(),
+          // Create size breakdowns from order lines
+          sizeBreakdown: {
+            create: order.orderLines.map((line) => ({
+              orderLineId: line.id,
+              size: line.size ?? "",
+              sku: line.style ?? null,
+              quantity: line.quantity,
+              produced: 0,
+            })),
+          },
+        },
+      }),
+    ]);
+
+    revalidatePath("/production-runs");
+    revalidatePath("/orders");
+    return { success: true, runId: run.id };
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to accept job";
+    return { success: false, error: message };
+  }
+}

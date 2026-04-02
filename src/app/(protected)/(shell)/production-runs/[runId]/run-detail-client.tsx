@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ContextualHelp } from "@/components/ui/contextual-help";
-import { ArrowLeft, Check, Lock } from "lucide-react";
+import { ArrowLeft, Check, Lock, ScanLine, Package, Info } from "lucide-react";
 import { StatusBadge, Badge } from "@/components/ui/badge";
 import { RUN_STATUS_DISPLAY, RUN_STATUS_ORDER, getAllowedTransitions, isAdminOnlyStatus, formatDate } from "@/types/supply-chain";
 import { updateProductionRun, generateBatchTag } from "@/lib/actions/production-runs";
@@ -269,6 +269,107 @@ export function RunDetailClient({ run, role }: { run: RunFull; role: string }) {
         <div className="bg-card border border-border rounded-xl p-4">
           <p className="text-[9px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1">Tagged</p>
           <p className="text-[22px] font-bold tabular-nums text-badge-green-text">{taggedCount}</p>
+        </div>
+      </div>
+
+      {/* ── Scanning ─────────────────────────────────────────────────────────── */}
+      <div className={`rounded-xl border-2 p-5 mb-6 transition-colors ${
+        run.status === "IN_PRODUCTION"
+          ? "bg-card border-foreground/20"
+          : "bg-muted/30 border-border"
+      }`}>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className={`text-[11px] font-bold uppercase tracking-wider ${
+            run.status === "IN_PRODUCTION" ? "text-foreground" : "text-muted-foreground"
+          }`}>
+            Scanning
+          </h3>
+          {run.status !== "IN_PRODUCTION" && (
+            <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+              <Info size={11} />
+              {run.status === "PLANNED" ? "Set status to In Production to unlock" : "Scanning complete"}
+            </div>
+          )}
+        </div>
+
+        {/* Batch scanning — primary */}
+        <div className={`rounded-xl p-4 mb-3 border ${
+          run.status === "IN_PRODUCTION"
+            ? "bg-foreground text-background border-transparent"
+            : "bg-muted/50 border-border"
+        }`}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Package size={20} className={run.status === "IN_PRODUCTION" ? "text-background" : "text-muted-foreground/40"} strokeWidth={1.5} />
+              <div>
+                <p className={`text-[13px] font-bold ${run.status === "IN_PRODUCTION" ? "text-background" : "text-muted-foreground/50"}`}>
+                  Batch Scan
+                </p>
+                <p className={`text-[11px] ${run.status === "IN_PRODUCTION" ? "text-background/70" : "text-muted-foreground/40"}`}>
+                  Generate one QR / NFC tag for the entire run
+                </p>
+              </div>
+            </div>
+            {run.status === "IN_PRODUCTION" ? (
+              <button
+                onClick={() => setShowBatchGenerate(true)}
+                className="px-4 py-2 rounded-lg bg-background text-foreground text-[11px] font-bold uppercase tracking-wider"
+              >
+                Generate
+              </button>
+            ) : (
+              <span className="px-4 py-2 rounded-lg bg-muted/40 text-muted-foreground/40 text-[11px] font-bold uppercase tracking-wider">
+                Locked
+              </span>
+            )}
+          </div>
+
+          {/* Show existing batch codes */}
+          {run.status === "IN_PRODUCTION" && (run.batchQrCode || run.batchNfcTag) && (
+            <div className="mt-3 pt-3 border-t border-background/20 flex items-center gap-4">
+              {run.batchQrCode && (
+                <div className="text-[10px] text-background/70">
+                  <span className="font-bold text-background">QR</span> {run.batchQrCode.slice(0, 20)}…
+                </div>
+              )}
+              {run.batchNfcTag && (
+                <div className="text-[10px] text-background/70">
+                  <span className="font-bold text-background">NFC</span> {run.batchNfcTag.slice(0, 20)}…
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Individual scanning — secondary */}
+        <div className={`rounded-xl p-4 border ${
+          run.status === "IN_PRODUCTION" ? "bg-card border-border" : "bg-muted/20 border-border/50"
+        }`}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <ScanLine size={20} className={run.status === "IN_PRODUCTION" ? "text-foreground" : "text-muted-foreground/40"} strokeWidth={1.5} />
+              <div>
+                <p className={`text-[13px] font-bold ${run.status === "IN_PRODUCTION" ? "text-foreground" : "text-muted-foreground/40"}`}>
+                  Scan Individual Garments
+                </p>
+                <p className={`text-[11px] ${run.status === "IN_PRODUCTION" ? "text-muted-foreground" : "text-muted-foreground/40"}`}>
+                  Tag each garment one by one · {run.unitsProduced}/{run.quantity} scanned
+                </p>
+              </div>
+            </div>
+            {run.status === "IN_PRODUCTION" ? (
+              <Link
+                href={`/production-runs/${run.id}/scan`}
+                className="px-4 py-2 rounded-lg border border-border text-[11px] font-bold uppercase tracking-wider text-foreground hover:bg-secondary transition-colors"
+              >
+                Open
+              </Link>
+            ) : (
+              <span className="px-4 py-2 rounded-lg bg-muted/40 text-muted-foreground/40 text-[11px] font-bold uppercase tracking-wider">
+                Locked
+              </span>
+            )}
+          </div>
         </div>
       </div>
 

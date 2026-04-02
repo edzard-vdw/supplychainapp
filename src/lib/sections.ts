@@ -98,20 +98,19 @@ export const ADMIN_SECTIONS: HubSection[] = [
 export const SUPPLIER_SECTIONS: HubSection[] = [
   {
     id: "production",
-    label: "PRODUCTION",
+    label: "JOBS.",
     icon: Factory,
-    description: "Your orders and production runs",
+    description: "Incoming jobs & active runs",
     color: "hsl(271 76% 53%)",
     glowColor: "hsl(271 76% 53% / 0.25)",
     routePrefix: "/production-runs",
     tabs: [
-      { name: "Runs", slug: "list" },
-      { name: "Orders", slug: "orders" },
+      { name: "Jobs", slug: "list" },
     ],
   },
   {
     id: "materials",
-    label: "MATERIALS",
+    label: "MATERIALS.",
     icon: Palette,
     description: "Yarn stock and deliveries",
     color: "hsl(21 90% 48%)",
@@ -121,9 +120,9 @@ export const SUPPLIER_SECTIONS: HubSection[] = [
   },
   {
     id: "new-run",
-    label: "NEW RUN",
+    label: "NEW JOB.",
     icon: Zap,
-    description: "Start a new production run",
+    description: "Start a production run",
     color: "hsl(217 91% 60%)",
     glowColor: "hsl(217 91% 60% / 0.25)",
     routePrefix: "/production-runs?create=true",

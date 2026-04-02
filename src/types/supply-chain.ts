@@ -52,6 +52,7 @@ export const RUN_STATUS_DISPLAY: Record<string, { label: string; bgClass: string
   QC: { label: "QC / Scan", bgClass: "bg-badge-purple-bg", textClass: "text-badge-purple-text" },
   SHIPPED: { label: "Shipping", bgClass: "bg-badge-sky-bg", textClass: "text-badge-sky-text" },
   RECEIVED: { label: "Received", bgClass: "bg-badge-green-bg", textClass: "text-badge-green-text" },
+  COMPLETED: { label: "Completed", bgClass: "bg-badge-green-bg", textClass: "text-badge-green-text" },
 };
 
 // ─── Run status flow ─────────────────────────────────────
@@ -63,6 +64,7 @@ export const RUN_STATUS_ORDER = [
   "QC",
   "SHIPPED",
   "RECEIVED",
+  "COMPLETED",
 ] as const;
 
 // Supplier pipeline — stages they control
@@ -90,7 +92,7 @@ export function getAllowedTransitions(currentStatus: string, role: string): stri
 
 // Whether a status is a "supplier" status or "admin" status
 export function isAdminOnlyStatus(status: string): boolean {
-  return status === "RECEIVED";
+  return status === "RECEIVED" || status === "COMPLETED";
 }
 
 // ─── Formatters ──────────────────────────────────────────

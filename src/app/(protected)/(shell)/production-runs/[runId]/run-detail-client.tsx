@@ -790,12 +790,12 @@ export function RunDetailClient({
               </button>
             </div>
           );
-        } else if (run.status === "SHIPPED" && role === "ADMIN" && allowedStatuses.includes("RECEIVED")) {
+        } else if (run.status === "SHIPPED" && role === "ADMIN") {
           btn = (
-            <button onClick={() => handleStatusAdvance("RECEIVED")} disabled={isPending}
-              className="w-full py-4 rounded-xl bg-badge-blue-text text-white text-[13px] font-bold uppercase tracking-wider flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50">
-              {isPending ? "Updating…" : <>"Confirm Goods Received" <ChevronRight size={16} strokeWidth={2.5} /></>}
-            </button>
+            <Link href={`/production-runs/${run.id}/receive`}
+              className="w-full py-4 rounded-xl bg-badge-blue-text text-white text-[13px] font-bold uppercase tracking-wider flex items-center justify-center gap-2 hover:opacity-90 transition-opacity">
+              Confirm Goods Received <ChevronRight size={16} strokeWidth={2.5} />
+            </Link>
           );
         }
         if (!btn) return null;

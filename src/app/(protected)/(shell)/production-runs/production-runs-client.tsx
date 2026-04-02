@@ -57,6 +57,7 @@ export function ProductionRunsClient({
   acknowledgedOrders,
   pendingAcceptanceCount,
   filterOrderLineId,
+  shippedAwaitingReceipt = 0,
   isAdmin,
   userSupplierId,
   showCreateOnLoad,
@@ -68,6 +69,7 @@ export function ProductionRunsClient({
   acknowledgedOrders?: AcknowledgedOrder[];
   pendingAcceptanceCount?: number;
   filterOrderLineId?: number;
+  shippedAwaitingReceipt?: number;
   isAdmin: boolean;
   userSupplierId: number | null;
   showCreateOnLoad?: boolean;
@@ -512,6 +514,27 @@ export function ProductionRunsClient({
           </button>
         </div>
       </div>
+
+      {/* ── Admin: runs awaiting receipt confirmation ── */}
+      {isAdmin && shippedAwaitingReceipt > 0 && (
+        <div className="mb-5 flex items-center gap-3 p-4 rounded-xl bg-badge-sky-bg/50 border border-badge-sky-text/20">
+          <div className="w-8 h-8 rounded-full bg-badge-sky-text/10 flex items-center justify-center shrink-0">
+            <span className="text-[13px] font-bold text-badge-sky-text">{shippedAwaitingReceipt}</span>
+          </div>
+          <div className="flex-1">
+            <p className="text-[12px] font-semibold text-foreground">
+              {shippedAwaitingReceipt} shipment{shippedAwaitingReceipt !== 1 ? "s" : ""} awaiting your receipt confirmation
+            </p>
+            <p className="text-[10px] text-muted-foreground">Open each run and click "Confirm Goods Received" to mark as received.</p>
+          </div>
+          <button
+            onClick={() => { setVisibleColumns(new Set(["SHIPPED"])); setViewMode("pipeline"); }}
+            className="px-4 py-2 rounded-lg bg-badge-sky-text text-white text-[11px] font-bold uppercase tracking-wider shrink-0 hover:opacity-90 transition-opacity"
+          >
+            View Shipped →
+          </button>
+        </div>
+      )}
 
       {/* ── Standalone Create form (from top button / homepage) ── */}
       {showCreate && (

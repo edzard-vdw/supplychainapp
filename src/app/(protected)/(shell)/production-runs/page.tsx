@@ -71,7 +71,7 @@ export default async function ProductionRunsPage({ searchParams }: { searchParam
   }
 
   // ── Admin: keep existing production runs view ──────────────────────────────
-  const [runs, suppliers, yarnLots] = await Promise.all([
+  const [runs, suppliers, yarnLots, shippedCount] = await Promise.all([
     prisma.productionRun.findMany({
       where: { ...supplierFilter, ...(orderLineId ? { orderLineId } : {}) },
       orderBy: { createdAt: "desc" },
@@ -94,6 +94,8 @@ export default async function ProductionRunsPage({ searchParams }: { searchParam
       include: { delivery: { select: { deliveryNoteRef: true, status: true } } },
       orderBy: { colourCode: "asc" },
     }),
+    // Runs awaiting admin receipt confirmation
+    prisma.productionRun.count({ where: { status: "SHIPPED" } }),
   ]);
 
   const yarnLotOptions = yarnLots.map((l) => ({
@@ -113,6 +115,7 @@ export default async function ProductionRunsPage({ searchParams }: { searchParam
       yarnLots={yarnLotOptions}
       acknowledgedOrders={[]}
       pendingAcceptanceCount={0}
+      shippedAwaitingReceipt={shippedCount}
       filterOrderLineId={orderLineId}
       isAdmin={true}
       userSupplierId={session.supplierId}

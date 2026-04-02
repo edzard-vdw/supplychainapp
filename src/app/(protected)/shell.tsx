@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { Menu, X, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getSectionsForRole } from "@/lib/sections";
+import { ToastProvider } from "@/components/ui/toast";
 
 interface ShellProps {
   user: { id: number; email: string; name: string; role: string; supplierId?: number | null; supplierName?: string | null };
@@ -220,7 +221,7 @@ export function Shell({ user, children }: ShellProps) {
 
         {/* ── Page content ── */}
         <div className="flex-1 overflow-y-auto">
-          {children}
+          <ToastProvider>{children}</ToastProvider>
         </div>
       </div>
 

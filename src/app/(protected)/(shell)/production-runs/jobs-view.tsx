@@ -199,7 +199,7 @@ export function JobsView({ pendingJobs, activeRuns }: { pendingJobs: PendingJob[
                         {isAccepting ? "Accepting…" : "Accept Job →"}
                       </button>
                       <Link
-                        href={`/orders/${job.id}`}
+                        href={`/orders/${job.id}/po-view`}
                         className="px-4 py-3 rounded-xl border border-border text-[11px] font-medium text-muted-foreground hover:text-foreground transition-colors"
                       >
                         View PO

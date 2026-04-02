@@ -221,7 +221,7 @@ export function HubView({ user, stats }: HubViewProps) {
           {/* Pending orders alert */}
           {stats.pendingOrders > 0 && (
             <Link
-              href="/production-runs/orders"
+              href="/production-runs"
               className="flex items-center gap-3 p-3 rounded-xl bg-badge-blue-bg border border-badge-blue-text/20 hover:bg-badge-blue-bg/80 transition-colors mb-2"
             >
               <div className="w-8 h-8 rounded-full bg-badge-blue-text text-white flex items-center justify-center text-[12px] font-bold shrink-0">

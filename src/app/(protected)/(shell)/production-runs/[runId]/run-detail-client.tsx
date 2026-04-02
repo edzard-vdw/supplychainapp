@@ -49,7 +49,6 @@ type RunFull = {
 export function RunDetailClient({ run, role }: { run: RunFull; role: string }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [showBatchGenerate, setShowBatchGenerate] = useState(false);
   const [confirmStatus, setConfirmStatus] = useState<string | null>(null);
 
   const taggedCount = run.garments.filter((g) => g.isTagged).length;
@@ -89,7 +88,6 @@ export function RunDetailClient({ run, role }: { run: RunFull; role: string }) {
   function handleGenerateBatchTag(type: "qr" | "nfc") {
     startTransition(async () => {
       await generateBatchTag(run.id, type);
-      setShowBatchGenerate(false);
       router.refresh();
     });
   }
@@ -311,12 +309,19 @@ export function RunDetailClient({ run, role }: { run: RunFull; role: string }) {
               </div>
             </div>
             {run.status === "IN_PRODUCTION" ? (
-              <button
-                onClick={() => setShowBatchGenerate(true)}
-                className="px-4 py-2 rounded-lg bg-background text-foreground text-[11px] font-bold uppercase tracking-wider"
-              >
-                Generate
-              </button>
+              run.batchQrCode ? (
+                <span className="px-4 py-2 rounded-lg bg-background/20 text-background text-[11px] font-bold uppercase tracking-wider">
+                  Generated ✓
+                </span>
+              ) : (
+                <button
+                  onClick={() => handleGenerateBatchTag("qr")}
+                  disabled={isPending}
+                  className="px-4 py-2 rounded-lg bg-background text-foreground text-[11px] font-bold uppercase tracking-wider disabled:opacity-50"
+                >
+                  {isPending ? "Generating…" : "Generate QR"}
+                </button>
+              )
             ) : (
               <span className="px-4 py-2 rounded-lg bg-muted/40 text-muted-foreground/40 text-[11px] font-bold uppercase tracking-wider">
                 Locked
@@ -324,19 +329,18 @@ export function RunDetailClient({ run, role }: { run: RunFull; role: string }) {
             )}
           </div>
 
-          {/* Show existing batch codes */}
-          {run.status === "IN_PRODUCTION" && (run.batchQrCode || run.batchNfcTag) && (
+          {/* Show existing batch QR code */}
+          {run.status === "IN_PRODUCTION" && run.batchQrCode && (
             <div className="mt-3 pt-3 border-t border-background/20 flex items-center gap-4">
-              {run.batchQrCode && (
-                <div className="text-[10px] text-background/70">
-                  <span className="font-bold text-background">QR</span> {run.batchQrCode.slice(0, 20)}…
-                </div>
-              )}
-              {run.batchNfcTag && (
-                <div className="text-[10px] text-background/70">
-                  <span className="font-bold text-background">NFC</span> {run.batchNfcTag.slice(0, 20)}…
-                </div>
-              )}
+              <img
+                src={`/api/qr/generate?data=${encodeURIComponent(run.batchQrCode)}`}
+                alt="Batch QR"
+                className="w-16 h-16 bg-white rounded-lg p-1 shrink-0"
+              />
+              <div>
+                <p className="text-[9px] text-background/60 uppercase tracking-wider mb-0.5">Batch QR Code</p>
+                <p className="text-[10px] font-mono-brand text-background/80 break-all">{run.batchQrCode.slice(0, 32)}…</p>
+              </div>
             </div>
           )}
         </div>

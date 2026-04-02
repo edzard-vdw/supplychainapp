@@ -757,52 +757,54 @@ export function RunDetailClient({
         </div>
       )}
 
-      {/* ── Sticky bottom action bar ── */}
-      {(["PLANNED","IN_PRODUCTION","QC"].includes(run.status) || (run.status === "SHIPPED" && role === "ADMIN")) && (
-        <div className="fixed bottom-0 inset-x-0 z-30 bg-background/95 backdrop-blur border-t border-border px-4 py-3 safe-area-bottom">
-          <div className="max-w-[700px] mx-auto">
-            {run.status === "PLANNED" && (
-              <button
-                onClick={openStartModal}
-                disabled={isPending}
-                className="w-full py-4 rounded-xl bg-foreground text-background text-[13px] font-bold uppercase tracking-wider flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50"
-              >
-                Start Production <ChevronRight size={16} strokeWidth={2.5} />
-              </button>
-            )}
-            {run.status === "IN_PRODUCTION" && allowedStatuses.includes("QC") && (
-              <button
-                onClick={() => handleStatusAdvance("QC")}
-                disabled={isPending}
-                className="w-full py-4 rounded-xl bg-badge-purple-text text-white text-[13px] font-bold uppercase tracking-wider flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50"
-              >
-                {isPending ? "Updating…" : "Production Complete → QC / Scan"}
-                {!isPending && <ChevronRight size={16} strokeWidth={2.5} />}
-              </button>
-            )}
-            {run.status === "QC" && allowedStatuses.includes("SHIPPED") && (
-              <button
-                onClick={() => handleStatusAdvance("SHIPPED")}
-                disabled={isPending}
-                className="w-full py-4 rounded-xl bg-badge-sky-text text-white text-[13px] font-bold uppercase tracking-wider flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50"
-              >
-                {isPending ? "Updating…" : "Scanning Complete → Ship"}
-                {!isPending && <ChevronRight size={16} strokeWidth={2.5} />}
-              </button>
-            )}
-            {run.status === "SHIPPED" && role === "ADMIN" && allowedStatuses.includes("RECEIVED") && (
-              <button
-                onClick={() => handleStatusAdvance("RECEIVED")}
-                disabled={isPending}
-                className="w-full py-4 rounded-xl bg-badge-blue-text text-white text-[13px] font-bold uppercase tracking-wider flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50"
-              >
-                {isPending ? "Updating…" : "Confirm Goods Received"}
-                {!isPending && <ChevronRight size={16} strokeWidth={2.5} />}
-              </button>
-            )}
-          </div>
-        </div>
-      )}
+      {/* ── Stage CTA — inline on desktop, sticky on mobile ── */}
+      {(() => {
+        let btn: React.ReactNode = null;
+        if (run.status === "PLANNED") {
+          btn = (
+            <button onClick={openStartModal} disabled={isPending}
+              className="w-full py-4 rounded-xl bg-foreground text-background text-[13px] font-bold uppercase tracking-wider flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50">
+              Start Production <ChevronRight size={16} strokeWidth={2.5} />
+            </button>
+          );
+        } else if (run.status === "IN_PRODUCTION" && allowedStatuses.includes("QC")) {
+          btn = (
+            <button onClick={() => handleStatusAdvance("QC")} disabled={isPending}
+              className="w-full py-4 rounded-xl bg-badge-purple-text text-white text-[13px] font-bold uppercase tracking-wider flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50">
+              {isPending ? "Updating…" : <>"Production Complete → QC / Scan" <ChevronRight size={16} strokeWidth={2.5} /></>}
+            </button>
+          );
+        } else if (run.status === "QC" && allowedStatuses.includes("SHIPPED")) {
+          btn = (
+            <button onClick={() => handleStatusAdvance("SHIPPED")} disabled={isPending}
+              className="w-full py-4 rounded-xl bg-badge-sky-text text-white text-[13px] font-bold uppercase tracking-wider flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50">
+              {isPending ? "Updating…" : <>"Scanning Complete → Ship" <ChevronRight size={16} strokeWidth={2.5} /></>}
+            </button>
+          );
+        } else if (run.status === "SHIPPED" && role === "ADMIN" && allowedStatuses.includes("RECEIVED")) {
+          btn = (
+            <button onClick={() => handleStatusAdvance("RECEIVED")} disabled={isPending}
+              className="w-full py-4 rounded-xl bg-badge-blue-text text-white text-[13px] font-bold uppercase tracking-wider flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50">
+              {isPending ? "Updating…" : <>"Confirm Goods Received" <ChevronRight size={16} strokeWidth={2.5} /></>}
+            </button>
+          );
+        }
+        if (!btn) return null;
+        return (
+          <>
+            {/* Desktop: inline at bottom of content */}
+            <div className="hidden md:block mt-2 mb-4">{btn}</div>
+
+            {/* Mobile: fixed bar above browser chrome */}
+            <div
+              className="md:hidden fixed bottom-0 inset-x-0 z-30 bg-background/95 backdrop-blur border-t border-border px-4 pt-3"
+              style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}
+            >
+              <div className="max-w-[700px] mx-auto">{btn}</div>
+            </div>
+          </>
+        );
+      })()}
 
       {/* ── "Start Production" modal overlay ── */}
       {showStartModal && (

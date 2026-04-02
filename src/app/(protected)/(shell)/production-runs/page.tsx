@@ -12,7 +12,7 @@ export default async function ProductionRunsPage({ searchParams }: { searchParam
 
   // ── Supplier: show unified Jobs view ──────────────────────────────────────
   if (isSupplier) {
-    const [pendingJobs, activeRuns] = await Promise.all([
+    const [pendingJobs, activeRuns, allOrders, yarnLots] = await Promise.all([
       // CONFIRMED orders = new jobs waiting for acceptance
       prisma.order.findMany({
         where: { supplierId: session.supplierId!, status: "CONFIRMED" },
@@ -35,12 +35,37 @@ export default async function ProductionRunsPage({ searchParams }: { searchParam
           _count: { select: { garments: true } },
         },
       }),
+      // All orders for this supplier (any status) — for Orders tab
+      prisma.order.findMany({
+        where: { supplierId: session.supplierId! },
+        orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
+        select: {
+          id: true,
+          orderRef: true,
+          status: true,
+          client: true,
+          dueDate: true,
+          totalQuantity: true,
+          _count: { select: { orderLines: true } },
+        },
+      }),
+      // Yarn lots available to this supplier (linked via delivery's supplierId)
+      prisma.yarnDeliveryLine.findMany({
+        where: {
+          remainingKg: { gt: 0 },
+          delivery: { supplierId: session.supplierId! },
+        },
+        include: { delivery: { select: { deliveryNoteRef: true } } },
+        orderBy: [{ colourCode: "asc" }, { lotNumber: "asc" }],
+      }),
     ]);
 
     return (
       <JobsView
         pendingJobs={JSON.parse(JSON.stringify(pendingJobs))}
         activeRuns={JSON.parse(JSON.stringify(activeRuns))}
+        allOrders={JSON.parse(JSON.stringify(allOrders))}
+        yarnLots={JSON.parse(JSON.stringify(yarnLots))}
       />
     );
   }

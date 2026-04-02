@@ -17,24 +17,38 @@ export default async function ProductionRunDetailPage({ params }: { params: Prom
   if (!run) notFound();
 
   // Fetch order lines with colors so the client can derive colour groups
-  const orderLines = run.orderId
-    ? await prisma.orderLine.findMany({
-        where: { orderId: run.orderId },
-        select: {
-          id: true,
-          colorId: true,
-          size: true,
-          quantity: true,
-          color: { select: { name: true, hexValue: true } },
-        },
-        orderBy: { createdAt: "asc" },
-      })
-    : [];
+  const [orderLines, yarnLots] = await Promise.all([
+    run.orderId
+      ? prisma.orderLine.findMany({
+          where: { orderId: run.orderId },
+          select: {
+            id: true,
+            colorId: true,
+            size: true,
+            quantity: true,
+            color: { select: { name: true, hexValue: true } },
+          },
+          orderBy: { createdAt: "asc" },
+        })
+      : Promise.resolve([]),
+    // Yarn lots available to this supplier
+    run.supplierId
+      ? prisma.yarnDeliveryLine.findMany({
+          where: {
+            remainingKg: { gt: 0 },
+            delivery: { supplierId: run.supplierId },
+          },
+          include: { delivery: { select: { deliveryNoteRef: true } } },
+          orderBy: [{ colourCode: "asc" }, { lotNumber: "asc" }],
+        })
+      : Promise.resolve([]),
+  ]);
 
   return (
     <RunDetailClient
       run={JSON.parse(JSON.stringify(run))}
       orderLines={JSON.parse(JSON.stringify(orderLines))}
+      yarnLots={JSON.parse(JSON.stringify(yarnLots))}
       role={session.role}
     />
   );

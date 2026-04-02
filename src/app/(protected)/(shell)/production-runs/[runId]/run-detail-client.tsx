@@ -16,6 +16,16 @@ import { updateProductionRun, generateBatchTag, startProduction } from "@/lib/ac
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
+type YarnLot = {
+  id: number;
+  colourCode: string;
+  colourName: string | null;
+  lotNumber: string | null;
+  yarnType: string;
+  remainingKg: number;
+  delivery: { deliveryNoteRef: string };
+};
+
 type RunFull = {
   id: number;
   runCode: string;
@@ -29,7 +39,8 @@ type RunFull = {
   batchQrCode: string | null;
   batchNfcTag: string | null;
   // Manufacturing (entered at IN_PRODUCTION)
-  yarnColourCode: string | null; // repurposed as "Yarn Stock" reference
+  yarnColourCode: string | null; // colour code from yarn delivery line
+  yarnLotNumber: string | null;  // lot number from yarn delivery line
   washingProgram: string | null;
   washingTemperature: number | null;
   machineGauge: string | null;
@@ -90,10 +101,12 @@ function ColorSwatch({ hexValue, name, size = "md" }: { hexValue: string | null;
 export function RunDetailClient({
   run,
   orderLines,
+  yarnLots,
   role,
 }: {
   run: RunFull;
   orderLines: OrderLineWithColor[];
+  yarnLots: YarnLot[];
   role: string;
 }) {
   const router = useRouter();
@@ -131,8 +144,8 @@ export function RunDetailClient({
   const [startStep, setStartStep] = useState<1 | 2>(1);
   const [allColors, setAllColors] = useState(true);
   const [selectedColorIds, setSelectedColorIds] = useState<number[]>([]);
+  const [selectedYarnLineId, setSelectedYarnLineId] = useState<number | null>(null);
   const [mfgForm, setMfgForm] = useState({
-    yarnStock: "",
     machineGauge: "",
     knitwearPly: "",
     stitchType: "",
@@ -162,7 +175,8 @@ export function RunDetailClient({
     setStartStep(1);
     setAllColors(true);
     setSelectedColorIds([]);
-    setMfgForm({ yarnStock: "", machineGauge: "", knitwearPly: "", stitchType: "", washingProgram: "", washingTemperature: "", expectedExFactory: "" });
+    setSelectedYarnLineId(null);
+    setMfgForm({ machineGauge: "", knitwearPly: "", stitchType: "", washingProgram: "", washingTemperature: "", expectedExFactory: "" });
     setShowStartModal(true);
   }
 
@@ -172,10 +186,12 @@ export function RunDetailClient({
   }
 
   function handleConfirmStartProduction() {
+    const selectedYarnLine = yarnLots.find((l) => l.id === selectedYarnLineId) ?? null;
     startTransition(async () => {
       const result = await startProduction(run.id, {
         selectedColorIds: allColors ? null : selectedColorIds,
-        yarnStock: mfgForm.yarnStock || null,
+        yarnColourCode: selectedYarnLine?.colourCode ?? null,
+        yarnLotNumber: selectedYarnLine?.lotNumber ?? null,
         machineGauge: mfgForm.machineGauge || null,
         knitwearPly: mfgForm.knitwearPly || null,
         stitchType: mfgForm.stitchType || null,
@@ -414,7 +430,8 @@ export function RunDetailClient({
             <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-3">Manufacturing Details</p>
             <div className="grid grid-cols-2 gap-x-6 gap-y-3">
               {[
-                { label: "Yarn Stock", value: run.yarnColourCode },
+                { label: "Yarn Colour", value: run.yarnColourCode },
+                { label: "Yarn Lot", value: run.yarnLotNumber },
                 { label: "Machine Gauge", value: run.machineGauge },
                 { label: "Knitwear Ply", value: run.knitwearPly },
                 { label: "Stitch Type", value: run.stitchType },
@@ -713,7 +730,8 @@ export function RunDetailClient({
           <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-3">Manufacturing</p>
           <div className="grid grid-cols-2 gap-x-6 gap-y-2">
             {[
-              { label: "Yarn Stock", value: run.yarnColourCode },
+              { label: "Yarn Colour", value: run.yarnColourCode },
+              { label: "Yarn Lot", value: run.yarnLotNumber },
               { label: "Machine Gauge", value: run.machineGauge },
               { label: "Knitwear Ply", value: run.knitwearPly },
               { label: "Stitch Type", value: run.stitchType },
@@ -865,8 +883,47 @@ export function RunDetailClient({
                   </p>
 
                   <div className="space-y-3">
+                    {/* ── Yarn Stock (dropdown from delivery) ── */}
+                    <div>
+                      <label className="block text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-1">
+                        Yarn Stock
+                      </label>
+                      {yarnLots.length > 0 ? (
+                        <>
+                          <select
+                            value={selectedYarnLineId ?? ""}
+                            onChange={(e) => setSelectedYarnLineId(e.target.value ? Number(e.target.value) : null)}
+                            className="w-full px-3 py-2.5 rounded-lg bg-secondary border border-border text-[12px] text-foreground focus:outline-none focus:ring-1 focus:ring-foreground/30"
+                          >
+                            <option value="">Select yarn lot…</option>
+                            {yarnLots.map((lot) => (
+                              <option key={lot.id} value={lot.id}>
+                                {lot.colourName ?? lot.colourCode} ({lot.colourCode}) · Lot {lot.lotNumber} · {lot.remainingKg.toFixed(1)}kg remaining
+                              </option>
+                            ))}
+                          </select>
+                          {selectedYarnLineId && (() => {
+                            const lot = yarnLots.find((l) => l.id === selectedYarnLineId);
+                            if (!lot) return null;
+                            return (
+                              <div className="mt-2 px-3 py-2 rounded-lg bg-badge-green-bg border border-badge-green-text/20">
+                                <p className="text-[10px] font-bold text-badge-green-text mb-0.5">{lot.yarnType}</p>
+                                <p className="text-[10px] text-badge-green-text/80">
+                                  Delivery: {lot.delivery.deliveryNoteRef} · {lot.remainingKg.toFixed(1)}kg available
+                                </p>
+                              </div>
+                            );
+                          })()}
+                        </>
+                      ) : (
+                        <div className="px-3 py-2.5 rounded-lg bg-secondary/50 border border-border text-[11px] text-muted-foreground">
+                          No yarn deliveries recorded for your account. Contact admin to add stock.
+                        </div>
+                      )}
+                    </div>
+
+                    {/* ── Other manufacturing fields ── */}
                     {[
-                      { key: "yarnStock" as const, label: "Yarn Stock", placeholder: "e.g. Suedwolle Lot 6108892", type: "text" },
                       { key: "machineGauge" as const, label: "Machine Gauge", placeholder: "e.g. 7GG", type: "text" },
                       { key: "knitwearPly" as const, label: "Knitwear Ply", placeholder: "e.g. 2-ply", type: "text" },
                       { key: "stitchType" as const, label: "Stitch Type", placeholder: "e.g. Jersey, Rib, Intarsia", type: "text" },

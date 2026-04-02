@@ -3,9 +3,12 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ScanLine, ChevronRight, Clock, AlertCircle } from "lucide-react";
+import { ScanLine, ChevronRight, Clock, AlertCircle, List, GitBranch } from "lucide-react";
 import { acceptJobAndCreateRun } from "@/lib/actions/orders";
-import { RUN_STATUS_DISPLAY, formatDate } from "@/types/supply-chain";
+import { RUN_STATUS_DISPLAY, ORDER_STATUS_DISPLAY, formatDate } from "@/types/supply-chain";
+import { StatusBadge } from "@/components/ui/badge";
+
+// ─── Types ───────────────────────────────────────────────────────────────────
 
 type PendingJob = {
   id: number;
@@ -29,20 +32,56 @@ type ActiveRun = {
   _count: { garments: number };
 };
 
-const STATUS_ORDER = ["PLANNED", "IN_PRODUCTION", "QC", "SHIPPED"];
-
-const STATUS_STYLE: Record<string, { bg: string; text: string; dot: string }> = {
-  PLANNED:       { bg: "bg-muted/50",        text: "text-muted-foreground",   dot: "bg-muted-foreground" },
-  IN_PRODUCTION: { bg: "bg-badge-orange-bg", text: "text-badge-orange-text",  dot: "bg-badge-orange-text" },
-  QC:            { bg: "bg-badge-purple-bg", text: "text-badge-purple-text",  dot: "bg-badge-purple-text" },
-  SHIPPED:       { bg: "bg-badge-sky-bg",    text: "text-badge-sky-text",     dot: "bg-badge-sky-text" },
+type OrderSummary = {
+  id: number;
+  orderRef: string;
+  status: string;
+  client: string | null;
+  dueDate: string | null;
+  totalQuantity: number;
+  _count: { orderLines: number };
 };
 
-function RunCard({ run }: { run: ActiveRun }) {
+// ─── Constants ───────────────────────────────────────────────────────────────
+
+const RUN_STATUS_ORDER = ["PLANNED", "IN_PRODUCTION", "QC", "SHIPPED"];
+
+const STATUS_STYLE: Record<string, { bg: string; text: string; dot: string; bar: string }> = {
+  PLANNED:       { bg: "bg-muted/60",        text: "text-muted-foreground",  dot: "bg-muted-foreground",  bar: "bg-muted-foreground/40" },
+  IN_PRODUCTION: { bg: "bg-badge-orange-bg", text: "text-badge-orange-text", dot: "bg-badge-orange-text", bar: "bg-badge-orange-text" },
+  QC:            { bg: "bg-badge-purple-bg", text: "text-badge-purple-text", dot: "bg-badge-purple-text", bar: "bg-badge-purple-text" },
+  SHIPPED:       { bg: "bg-badge-sky-bg",    text: "text-badge-sky-text",    dot: "bg-badge-sky-text",    bar: "bg-badge-sky-text" },
+};
+
+// ─── Run Card (used in both Jobs and Pipeline tabs) ───────────────────────────
+
+function RunCard({ run, compact = false }: { run: ActiveRun; compact?: boolean }) {
   const style = STATUS_STYLE[run.status] ?? STATUS_STYLE.PLANNED;
   const pct = run.quantity > 0 ? Math.round((run.unitsProduced / run.quantity) * 100) : 0;
   const canScan = run.status === "QC";
   const display = RUN_STATUS_DISPLAY[run.status];
+
+  if (compact) {
+    return (
+      <Link
+        href={`/production-runs/${run.id}`}
+        className="block bg-card border border-border rounded-xl px-4 py-3 hover:border-foreground/20 transition-colors"
+      >
+        <p className="text-[12px] font-bold text-foreground">{run.runCode}</p>
+        <p className="text-[10px] text-muted-foreground mb-2">
+          {run.order?.orderRef ?? "—"}
+          {run.productName ? ` · ${run.productName}` : ""}
+        </p>
+        <div className="h-1.5 bg-secondary rounded-full overflow-hidden mb-1">
+          <div className={`h-full rounded-full ${style.bar}`} style={{ width: `${pct}%` }} />
+        </div>
+        <div className="flex justify-between text-[10px] text-muted-foreground">
+          <span>{run.unitsProduced}/{run.quantity}</span>
+          <span>{pct}%</span>
+        </div>
+      </Link>
+    );
+  }
 
   return (
     <Link
@@ -54,7 +93,7 @@ function RunCard({ run }: { run: ActiveRun }) {
         <div className="flex items-start justify-between gap-3 mb-3">
           <div className="min-w-0">
             <p className="text-[13px] font-bold text-foreground">{run.runCode}</p>
-            <p className="text-[11px] text-muted-foreground mt-0.5">
+            <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
               {run.order?.orderRef ?? "—"}
               {run.productName ? ` · ${run.productName}` : ""}
               {run.order?.dueDate ? ` · Due ${formatDate(run.order.dueDate)}` : ""}
@@ -73,24 +112,17 @@ function RunCard({ run }: { run: ActiveRun }) {
             <span>{pct}%</span>
           </div>
           <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
-            <div
-              className={`h-full rounded-full transition-all ${canScan ? "bg-badge-blue-text" : "bg-muted-foreground/40"}`}
-              style={{ width: `${pct}%` }}
-            />
+            <div className={`h-full rounded-full transition-all ${style.bar}`} style={{ width: `${pct}%` }} />
           </div>
         </div>
 
-        {/* Start Scanning CTA */}
+        {/* CTA row */}
         <div className="flex items-center justify-between">
-          <div
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-colors ${
-              canScan
-                ? "bg-foreground text-background"
-                : "bg-muted/50 text-muted-foreground/40 cursor-not-allowed"
-            }`}
-          >
+          <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-colors ${
+            canScan ? "bg-foreground text-background" : "bg-muted/50 text-muted-foreground/40 cursor-not-allowed"
+          }`}>
             <ScanLine size={12} strokeWidth={2} />
-            {canScan ? "Start Scanning" : "Start Scanning"}
+            Start Scanning
           </div>
           {!canScan && run.status === "PLANNED" && (
             <span className="text-[10px] text-muted-foreground">Start production first</span>
@@ -105,67 +137,47 @@ function RunCard({ run }: { run: ActiveRun }) {
   );
 }
 
-export function JobsView({ pendingJobs, activeRuns }: { pendingJobs: PendingJob[]; activeRuns: ActiveRun[] }) {
-  const router = useRouter();
-  const [isPending, startTransition] = useTransition();
-  const [acceptingId, setAcceptingId] = useState<number | null>(null);
-  const [error, setError] = useState<string | null>(null);
+// ─── Jobs Tab (pending POs + active runs) ─────────────────────────────────────
 
-  function handleAccept(orderId: number) {
-    setAcceptingId(orderId);
-    setError(null);
-    startTransition(async () => {
-      const result = await acceptJobAndCreateRun(orderId);
-      if (result.success && result.runId) {
-        router.push(`/production-runs/${result.runId}`);
-      } else {
-        setError(result.error ?? "Failed to accept job");
-        setAcceptingId(null);
-      }
-    });
-  }
-
-  // Group active runs by status for the pipeline display
-  const runsByStatus = STATUS_ORDER.reduce<Record<string, ActiveRun[]>>((acc, s) => {
+function JobsTab({
+  pendingJobs,
+  activeRuns,
+  isPending,
+  acceptingId,
+  error,
+  onAccept,
+}: {
+  pendingJobs: PendingJob[];
+  activeRuns: ActiveRun[];
+  isPending: boolean;
+  acceptingId: number | null;
+  error: string | null;
+  onAccept: (id: number) => void;
+}) {
+  const runsByStatus = RUN_STATUS_ORDER.reduce<Record<string, ActiveRun[]>>((acc, s) => {
     acc[s] = activeRuns.filter((r) => r.status === s);
     return acc;
   }, {});
 
-  const hasActiveRuns = activeRuns.length > 0;
-
   return (
-    <div className="px-4 py-6 max-w-[700px] mx-auto">
-      {/* Header */}
-      <div className="mb-6">
-        <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Production</p>
-        <h1 className="text-[22px] font-bold uppercase tracking-wide text-foreground">Jobs</h1>
-      </div>
-
-      {/* ── NEW JOBS ── */}
+    <div className="space-y-6">
+      {/* ── New Jobs ── */}
       {pendingJobs.length > 0 && (
-        <div className="mb-8">
+        <div>
           <div className="flex items-center gap-2 mb-3">
             <AlertCircle size={14} className="text-badge-orange-text" />
-            <h2 className="text-[11px] font-bold uppercase tracking-wider text-foreground">
-              New Jobs
-            </h2>
+            <h2 className="text-[11px] font-bold uppercase tracking-wider text-foreground">New Jobs</h2>
             <span className="w-5 h-5 rounded-full bg-badge-orange-text text-white flex items-center justify-center text-[10px] font-bold">
               {pendingJobs.length}
             </span>
           </div>
-
           <div className="space-y-3">
             {pendingJobs.map((job) => {
               const isAccepting = acceptingId === job.id && isPending;
-              // Summarise products
               const products = [...new Set(job.orderLines.map((l) => l.product))].slice(0, 2).join(", ");
               const sizes = [...new Set(job.orderLines.map((l) => l.size).filter(Boolean))].join(", ");
-
               return (
-                <div
-                  key={job.id}
-                  className="bg-card border-2 border-badge-orange-text/30 rounded-xl overflow-hidden"
-                >
+                <div key={job.id} className="bg-card border-2 border-badge-orange-text/30 rounded-xl overflow-hidden">
                   <div className="px-5 py-4">
                     <div className="flex items-start justify-between gap-3 mb-1">
                       <div>
@@ -184,17 +196,15 @@ export function JobsView({ pendingJobs, activeRuns }: { pendingJobs: PendingJob[
                         <p className="text-[9px] text-muted-foreground uppercase tracking-wider">units</p>
                       </div>
                     </div>
-
                     {(products || sizes) && (
                       <p className="text-[11px] text-muted-foreground mb-4">
                         {products}{sizes ? ` · Sizes: ${sizes}` : ""}
                         {job._count.orderLines > 1 && ` · ${job._count.orderLines} lines`}
                       </p>
                     )}
-
                     <div className="flex items-center gap-2">
                       <button
-                        onClick={() => handleAccept(job.id)}
+                        onClick={() => onAccept(job.id)}
                         disabled={isPending}
                         className="flex-1 py-3 rounded-xl bg-foreground text-background text-[12px] font-bold uppercase tracking-wider disabled:opacity-50 transition-opacity active:scale-95"
                       >
@@ -207,7 +217,6 @@ export function JobsView({ pendingJobs, activeRuns }: { pendingJobs: PendingJob[
                         View PO
                       </Link>
                     </div>
-
                     {error && acceptingId === job.id && (
                       <p className="text-[11px] text-destructive mt-2">{error}</p>
                     )}
@@ -219,19 +228,16 @@ export function JobsView({ pendingJobs, activeRuns }: { pendingJobs: PendingJob[
         </div>
       )}
 
-      {/* ── ACTIVE JOBS ── */}
-      {hasActiveRuns && (
+      {/* ── Active Jobs ── */}
+      {activeRuns.length > 0 && (
         <div>
           <div className="flex items-center gap-2 mb-3">
             <Clock size={14} className="text-muted-foreground" />
-            <h2 className="text-[11px] font-bold uppercase tracking-wider text-foreground">
-              Active Jobs
-            </h2>
+            <h2 className="text-[11px] font-bold uppercase tracking-wider text-foreground">Active Jobs</h2>
             <span className="text-[10px] text-muted-foreground">({activeRuns.length})</span>
           </div>
-
           <div className="space-y-6">
-            {STATUS_ORDER.map((status) => {
+            {RUN_STATUS_ORDER.map((status) => {
               const runs = runsByStatus[status];
               if (!runs || runs.length === 0) return null;
               const style = STATUS_STYLE[status];
@@ -252,13 +258,230 @@ export function JobsView({ pendingJobs, activeRuns }: { pendingJobs: PendingJob[
         </div>
       )}
 
-      {/* Empty state */}
-      {pendingJobs.length === 0 && !hasActiveRuns && (
+      {/* Empty */}
+      {pendingJobs.length === 0 && activeRuns.length === 0 && (
         <div className="text-center py-20 border border-dashed border-border rounded-xl">
           <p className="text-[14px] font-semibold text-foreground mb-1">No jobs yet</p>
           <p className="text-[12px] text-muted-foreground">New orders will appear here when assigned to you</p>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Orders Tab (all POs with status) ────────────────────────────────────────
+
+function OrdersTab({ orders }: { orders: OrderSummary[] }) {
+  if (orders.length === 0) {
+    return (
+      <div className="text-center py-20 border border-dashed border-border rounded-xl">
+        <p className="text-[14px] font-semibold text-foreground mb-1">No orders yet</p>
+        <p className="text-[12px] text-muted-foreground">Orders assigned to you will appear here</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-card border border-border rounded-xl overflow-hidden">
+      <table className="w-full text-[12px]">
+        <thead className="bg-secondary/30 border-b border-border">
+          <tr>
+            <th className="text-left px-4 py-3 text-[9px] font-mono uppercase tracking-wider text-muted-foreground">PO Ref</th>
+            <th className="text-left px-3 py-3 text-[9px] font-mono uppercase tracking-wider text-muted-foreground hidden sm:table-cell">Client</th>
+            <th className="text-left px-3 py-3 text-[9px] font-mono uppercase tracking-wider text-muted-foreground">Status</th>
+            <th className="text-left px-3 py-3 text-[9px] font-mono uppercase tracking-wider text-muted-foreground hidden sm:table-cell">Due</th>
+            <th className="text-right px-4 py-3 text-[9px] font-mono uppercase tracking-wider text-muted-foreground">Units</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-border">
+          {orders.map((order) => {
+            const display = ORDER_STATUS_DISPLAY[order.status];
+            return (
+              <tr key={order.id} className="hover:bg-secondary/20 transition-colors">
+                <td className="px-4 py-3">
+                  <Link href={`/orders/${order.id}/po-view`} className="font-bold text-foreground hover:text-foreground/70 transition-colors">
+                    {order.orderRef}
+                  </Link>
+                </td>
+                <td className="px-3 py-3 text-muted-foreground hidden sm:table-cell">
+                  {order.client ?? "—"}
+                </td>
+                <td className="px-3 py-3">
+                  {display ? (
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${display.bgClass} ${display.textClass}`}>
+                      {display.label}
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">{order.status}</span>
+                  )}
+                </td>
+                <td className="px-3 py-3 text-muted-foreground hidden sm:table-cell">
+                  {order.dueDate ? formatDate(order.dueDate) : "—"}
+                </td>
+                <td className="px-4 py-3 font-mono font-bold tabular-nums text-right text-foreground">
+                  {order.totalQuantity.toLocaleString()}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ─── Pipeline Tab (kanban-style by stage) ────────────────────────────────────
+
+function PipelineTab({ activeRuns }: { activeRuns: ActiveRun[] }) {
+  const [activeStage, setActiveStage] = useState(RUN_STATUS_ORDER[0]);
+  const runsByStatus = RUN_STATUS_ORDER.reduce<Record<string, ActiveRun[]>>((acc, s) => {
+    acc[s] = activeRuns.filter((r) => r.status === s);
+    return acc;
+  }, {});
+
+  return (
+    <div>
+      {/* Stage selector */}
+      <div className="flex gap-2 mb-5 overflow-x-auto scrollbar-none pb-1">
+        {RUN_STATUS_ORDER.map((status) => {
+          const style = STATUS_STYLE[status];
+          const count = runsByStatus[status]?.length ?? 0;
+          const isActive = activeStage === status;
+          return (
+            <button
+              key={status}
+              onClick={() => setActiveStage(status)}
+              className={`shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl border-2 transition-all text-[11px] font-bold uppercase tracking-wider ${
+                isActive
+                  ? `${style.bg} ${style.text} border-transparent`
+                  : "border-border text-muted-foreground hover:border-foreground/20"
+              }`}
+            >
+              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isActive ? style.dot : "bg-muted-foreground/40"}`} />
+              {RUN_STATUS_DISPLAY[status]?.label ?? status}
+              <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold ${
+                isActive ? "bg-white/30 text-inherit" : "bg-muted text-muted-foreground"
+              }`}>
+                {count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Runs in selected stage */}
+      {(() => {
+        const runs = runsByStatus[activeStage] ?? [];
+        if (runs.length === 0) {
+          return (
+            <div className="text-center py-16 border border-dashed border-border rounded-xl">
+              <p className="text-[13px] font-semibold text-foreground mb-1">
+                Nothing in {RUN_STATUS_DISPLAY[activeStage]?.label}
+              </p>
+              <p className="text-[11px] text-muted-foreground">Runs will appear here as they progress</p>
+            </div>
+          );
+        }
+        return (
+          <div className="space-y-2">
+            {runs.map((run) => <RunCard key={run.id} run={run} />)}
+          </div>
+        );
+      })()}
+
+      {activeRuns.length === 0 && (
+        <div className="text-center py-16 border border-dashed border-border rounded-xl">
+          <p className="text-[14px] font-semibold text-foreground mb-1">No active runs</p>
+          <p className="text-[12px] text-muted-foreground">Accept a job to create your first production run</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
+
+export function JobsView({
+  pendingJobs,
+  activeRuns,
+  allOrders,
+}: {
+  pendingJobs: PendingJob[];
+  activeRuns: ActiveRun[];
+  allOrders: OrderSummary[];
+  yarnLots: unknown[]; // consumed by run-detail, not needed here directly
+}) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [acceptingId, setAcceptingId] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<"jobs" | "orders" | "pipeline">("jobs");
+
+  function handleAccept(orderId: number) {
+    setAcceptingId(orderId);
+    setError(null);
+    startTransition(async () => {
+      const result = await acceptJobAndCreateRun(orderId);
+      if (result.success && result.runId) {
+        router.push(`/production-runs/${result.runId}`);
+      } else {
+        setError(result.error ?? "Failed to accept job");
+        setAcceptingId(null);
+      }
+    });
+  }
+
+  const pendingCount = pendingJobs.length;
+  const tabDefs = [
+    { key: "jobs" as const, label: "Jobs", icon: Clock, badge: pendingCount > 0 ? pendingCount : null },
+    { key: "orders" as const, label: "Orders", icon: List, badge: null },
+    { key: "pipeline" as const, label: "Pipeline", icon: GitBranch, badge: null },
+  ];
+
+  return (
+    <div className="px-4 py-6 max-w-[700px] mx-auto">
+      {/* Header */}
+      <div className="mb-5">
+        <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Production</p>
+        <h1 className="text-[22px] font-bold uppercase tracking-wide text-foreground">Jobs</h1>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-1 mb-6 bg-secondary/40 p-1 rounded-xl">
+        {tabDefs.map(({ key, label, icon: Icon, badge }) => (
+          <button
+            key={key}
+            onClick={() => setTab(key)}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-all ${
+              tab === key
+                ? "bg-card text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Icon size={12} strokeWidth={2} />
+            {label}
+            {badge !== null && (
+              <span className="w-4 h-4 rounded-full bg-badge-orange-text text-white flex items-center justify-center text-[9px] font-bold">
+                {badge}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab content */}
+      {tab === "jobs" && (
+        <JobsTab
+          pendingJobs={pendingJobs}
+          activeRuns={activeRuns}
+          isPending={isPending}
+          acceptingId={acceptingId}
+          error={error}
+          onAccept={handleAccept}
+        />
+      )}
+      {tab === "orders" && <OrdersTab orders={allOrders} />}
+      {tab === "pipeline" && <PipelineTab activeRuns={activeRuns} />}
     </div>
   );
 }

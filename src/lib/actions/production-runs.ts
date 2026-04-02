@@ -328,7 +328,8 @@ export async function startProduction(
   runId: number,
   data: {
     selectedColorIds: number[] | null; // null = all colors
-    yarnStock: string | null;
+    yarnColourCode: string | null;     // e.g. "MER-NAVY" — colour code from delivery line
+    yarnLotNumber: string | null;      // e.g. "6200145" — lot number from delivery line
     machineGauge: string | null;
     knitwearPly: string | null;
     stitchType: string | null;
@@ -346,7 +347,8 @@ export async function startProduction(
     if (run.status !== "PLANNED") return { success: false, error: "Run is not in PLANNED state" };
 
     const manufacturingData = {
-      yarnColourCode: data.yarnStock ?? null,
+      yarnColourCode: data.yarnColourCode ?? null,
+      yarnLotNumber: data.yarnLotNumber ?? null,
       machineGauge: data.machineGauge ?? null,
       knitwearPly: data.knitwearPly ?? null,
       stitchType: data.stitchType ?? null,

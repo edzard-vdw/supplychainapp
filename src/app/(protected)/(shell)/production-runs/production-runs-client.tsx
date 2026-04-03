@@ -743,10 +743,10 @@ export function ProductionRunsClient({
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search runs, orders, suppliers..." className="w-full pl-9 pr-4 py-2.5 bg-card border border-border rounded-lg text-[12px] text-foreground placeholder-muted-foreground outline-none focus:ring-1 focus:ring-ring" />
         </div>
-        <div className="flex items-center flex-wrap gap-1 bg-card border border-border rounded-lg p-1">
+        <div className="flex flex-wrap gap-1.5">
           <button
             onClick={toggleAll}
-            className={`px-2 py-1 rounded-md text-[8px] sm:text-[9px] font-bold uppercase tracking-wider transition-all whitespace-nowrap ${visibleColumns.size === statusOrder.length ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"}`}
+            className={`px-3 py-1.5 rounded-lg border text-[10px] font-bold uppercase tracking-wide transition-all whitespace-nowrap ${visibleColumns.size === statusOrder.length ? "bg-foreground border-foreground text-background" : "bg-card border-border text-muted-foreground hover:text-foreground"}`}
           >
             All
           </button>
@@ -756,7 +756,7 @@ export function ProductionRunsClient({
               <button
                 key={s}
                 onClick={() => toggleColumn(s)}
-                className={`px-2 py-1 rounded-md text-[8px] sm:text-[9px] font-bold uppercase tracking-wider transition-all whitespace-nowrap ${isOn ? "bg-secondary text-foreground" : "text-muted-foreground/40 line-through hover:text-muted-foreground hover:no-underline"}`}
+                className={`px-3 py-1.5 rounded-lg border text-[10px] font-bold uppercase tracking-wide transition-all whitespace-nowrap ${isOn ? "bg-secondary border-border text-foreground" : "bg-card border-border text-muted-foreground/40 line-through hover:text-muted-foreground hover:no-underline"}`}
               >
                 {RUN_STATUS_DISPLAY[s]?.label || s}
               </button>
@@ -960,10 +960,10 @@ export function ProductionRunsClient({
                   {/* Column header */}
                   <div className="px-3 py-2.5 border-b border-border bg-secondary/30">
                     <div className="flex items-center justify-between">
-                      <span className="text-[9px] font-bold uppercase tracking-wider text-foreground">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-foreground">
                         {isDoneColumn ? "Received" : (display?.label || status)}
                       </span>
-                      <span className="text-[9px] font-mono-brand text-muted-foreground tabular-nums">{columnRuns.length}</span>
+                      <span className="text-[10px] font-mono-brand text-muted-foreground tabular-nums">{columnRuns.length}</span>
                     </div>
                   </div>
 
@@ -985,7 +985,7 @@ export function ProductionRunsClient({
                             {run.runCode}
                           </Link>
                         </div>
-                        <p className="text-[9px] text-muted-foreground truncate mb-1">
+                        <p className="text-[10px] text-muted-foreground truncate mb-1">
                           {run.productName || run.orderLine?.product || "—"}
                           {run.productColor && <span className="text-foreground"> · {run.productColor}</span>}
                         </p>
@@ -993,23 +993,23 @@ export function ProductionRunsClient({
                         {run.sizeBreakdown.length > 0 ? (
                           <div className="flex flex-wrap gap-1 mb-1">
                             {run.sizeBreakdown.map((sb) => (
-                              <span key={sb.id} className="text-[7px] font-mono-brand px-1 py-0.5 rounded bg-secondary text-foreground">
+                              <span key={sb.id} className="text-[9px] font-mono-brand px-1.5 py-0.5 rounded bg-secondary text-foreground">
                                 {sb.size.split(" - ")[0] || sb.size} <span className="text-muted-foreground">×{sb.quantity}</span>
                               </span>
                             ))}
                           </div>
                         ) : run.productSize && (
-                          <p className="text-[8px] text-muted-foreground mb-1">Size: {run.productSize}</p>
+                          <p className="text-[10px] text-muted-foreground mb-1">Size: {run.productSize}</p>
                         )}
                         {(run.order || run.orderLine) && (
-                          <p className="text-[8px] text-muted-foreground/60 truncate">
+                          <p className="text-[10px] text-muted-foreground/60 truncate">
                             {run.order?.orderRef || run.orderLine?.order.orderRef}
                           </p>
                         )}
                         <div className="flex items-center justify-between">
-                          <span className="text-[9px] font-mono-brand text-muted-foreground tabular-nums">{run.unitsProduced}/{run.quantity}</span>
+                          <span className="text-[10px] font-mono-brand text-muted-foreground tabular-nums">{run.unitsProduced}/{run.quantity}</span>
                           {run.supplier && (
-                            <span className="text-[8px] text-muted-foreground truncate max-w-[80px]">{run.supplier.name}</span>
+                            <span className="text-[10px] text-muted-foreground truncate max-w-[80px]">{run.supplier.name}</span>
                           )}
                         </div>
                         {run.quantity > 0 && (
@@ -1105,7 +1105,7 @@ export function ProductionRunsClient({
               {archiveOpen && (
                 <div className="mt-3 bg-card border border-border rounded-xl overflow-hidden">
                   <div className="px-4 py-2.5 border-b border-border bg-secondary/20">
-                    <p className="text-[9px] font-mono-brand uppercase tracking-widest text-muted-foreground">Received — older than 7 days</p>
+                    <p className="text-[10px] font-mono-brand uppercase tracking-widest text-muted-foreground">Received — older than 7 days</p>
                   </div>
                   <div className="divide-y divide-border">
                     {filtered
@@ -1118,13 +1118,13 @@ export function ProductionRunsClient({
                         >
                           <div className="flex-1 min-w-0">
                             <p className="text-[11px] font-semibold text-foreground">{run.runCode}</p>
-                            <p className="text-[9px] text-muted-foreground truncate">
+                            <p className="text-[10px] text-muted-foreground truncate">
                               {run.productName || run.orderLine?.product || "—"}
                               {run.supplier ? ` · ${run.supplier.name}` : ""}
                             </p>
                           </div>
-                          <span className="text-[10px] font-mono-brand text-muted-foreground tabular-nums">{run.quantity} units</span>
-                          <span className="text-[9px] text-muted-foreground">{new Date(run.updatedAt ?? run.createdAt).toLocaleDateString()}</span>
+                          <span className="text-[11px] font-mono-brand text-muted-foreground tabular-nums">{run.quantity} units</span>
+                          <span className="text-[10px] text-muted-foreground">{new Date(run.updatedAt ?? run.createdAt).toLocaleDateString()}</span>
                         </Link>
                       ))}
                     {filtered.filter((r) => r.status === "COMPLETED" && !isRecentlyCompleted(r)).length === 0 && (
@@ -1154,7 +1154,7 @@ export function ProductionRunsClient({
                     <p className="text-[13px] font-semibold text-foreground">{run.runCode}</p>
                     <StatusBadge display={RUN_STATUS_DISPLAY[run.status] || RUN_STATUS_DISPLAY.PLANNED} />
                   </div>
-                  <p className="text-[10px] text-muted-foreground">
+                  <p className="text-[11px] text-muted-foreground">
                     {run.orderLine ? `${run.orderLine.order.orderRef} · ${run.orderLine.product}` : "No order linked"}
                   </p>
                 </div>
@@ -1168,7 +1168,7 @@ export function ProductionRunsClient({
                 </div>
                 <div className="text-right hidden sm:block">
                   <p className="text-[14px] font-bold font-mono-brand tabular-nums">{run.quantity}</p>
-                  <p className="text-[9px] text-muted-foreground">units</p>
+                  <p className="text-[10px] text-muted-foreground">units</p>
                 </div>
                 <Badge label={`${run._count.garments} tagged`} bgClass="bg-badge-green-bg" textClass="text-badge-green-text" />
                 {isExpanded ? <ChevronUp size={14} className="text-muted-foreground" /> : <ChevronDown size={14} className="text-muted-foreground" />}

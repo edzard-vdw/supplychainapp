@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Menu, X, Settings } from "lucide-react";
+import { Menu, X, Settings, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getSectionsForRole } from "@/lib/sections";
 import { ToastProvider } from "@/components/ui/toast";
@@ -18,6 +18,7 @@ interface ShellProps {
 export function Shell({ user, language, children }: ShellProps) {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [navDropdownOpen, setNavDropdownOpen] = useState(false);
 
   const allSections = getSectionsForRole(user.role);
   // Filter out hub-only action circles from sidebar
@@ -132,7 +133,7 @@ export function Shell({ user, language, children }: ShellProps) {
       {/* ── Main content area ── */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* ── Mobile header ── */}
-        <div className="md:hidden flex items-center h-12 px-4 border-b border-border bg-card shrink-0">
+        <div className="md:hidden flex items-center h-12 px-4 border-b border-border bg-card shrink-0 relative z-30">
           <button
             onClick={() => setMobileMenuOpen(true)}
             className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground"
@@ -140,12 +141,31 @@ export function Shell({ user, language, children }: ShellProps) {
             <Menu size={20} />
           </button>
           <div className="flex-1 flex items-center justify-center">
-            <span
-              className="text-[11px] font-bold uppercase tracking-[0.15em]"
-              style={{ color: isSettingsRoute ? undefined : activeSection?.color }}
-            >
-              {isSettingsRoute ? t("hub.settings", language) + "." : activeSection ? t(activeSection.labelKey, language).toUpperCase() + "." : ""}
-            </span>
+            {isSettingsRoute ? (
+              <span className="text-[11px] font-bold uppercase tracking-[0.15em]">
+                {t("hub.settings", language)}.
+              </span>
+            ) : (
+              <button
+                onClick={() => setNavDropdownOpen((o) => !o)}
+                className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-secondary/50 transition-colors"
+              >
+                <span
+                  className="text-[11px] font-bold uppercase tracking-[0.15em]"
+                  style={{ color: activeSection?.color }}
+                >
+                  {activeSection ? t(activeSection.labelKey, language).toUpperCase() + "." : ""}
+                </span>
+                <ChevronDown
+                  size={12}
+                  className="transition-transform duration-200"
+                  style={{
+                    color: activeSection?.color,
+                    transform: navDropdownOpen ? "rotate(180deg)" : "rotate(0deg)",
+                  }}
+                />
+              </button>
+            )}
           </div>
           <Link href="/dashboard" className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground" title="Home">
             <div className="w-5 h-5 rounded-full border-2 border-primary flex items-center justify-center">
@@ -153,6 +173,41 @@ export function Shell({ user, language, children }: ShellProps) {
             </div>
           </Link>
         </div>
+
+        {/* ── Mobile nav dropdown ── */}
+        {navDropdownOpen && (
+          <>
+            <div
+              className="fixed inset-0 z-20 md:hidden"
+              onClick={() => setNavDropdownOpen(false)}
+            />
+            <div className="absolute top-12 left-0 right-0 z-20 bg-card border-b border-border shadow-lg md:hidden">
+              <div className="px-3 py-2 space-y-0.5">
+                {sections.map((section) => {
+                  const Icon = section.icon;
+                  const isActive = section.id === activeSection?.id;
+                  return (
+                    <Link
+                      key={section.id}
+                      href={section.routePrefix}
+                      onClick={() => setNavDropdownOpen(false)}
+                      className={cn(
+                        "flex items-center gap-3 px-3 py-2.5 rounded-lg text-[12px] font-semibold transition-all",
+                        isActive
+                          ? "bg-secondary/80 text-foreground"
+                          : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
+                      )}
+                      style={isActive ? { color: section.color } : undefined}
+                    >
+                      <Icon size={16} strokeWidth={isActive ? 2 : 1.5} style={isActive ? { color: section.color } : undefined} />
+                      {t(section.labelKey, language)}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          </>
+        )}
 
         {/* ── Desktop header ── */}
         <div className="hidden md:flex items-center h-14 px-6 border-b border-border bg-card shrink-0">

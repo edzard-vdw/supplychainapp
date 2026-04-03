@@ -738,12 +738,12 @@ export function ProductionRunsClient({
       )}
 
       {/* Search + filter */}
-      <div className="flex items-center gap-3 mb-6 flex-wrap">
-        <div className="relative flex-1 min-w-[200px]">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-6">
+        <div className="relative flex-1">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search runs, orders, suppliers..." className="w-full pl-9 pr-4 py-2.5 bg-card border border-border rounded-lg text-[12px] text-foreground placeholder-muted-foreground outline-none focus:ring-1 focus:ring-ring" />
         </div>
-        <div className="flex items-center gap-1 bg-card border border-border rounded-lg p-1 overflow-x-auto scrollbar-none">
+        <div className="flex items-center flex-wrap gap-1 bg-card border border-border rounded-lg p-1">
           <button
             onClick={toggleAll}
             className={`px-2 py-1 rounded-md text-[8px] sm:text-[9px] font-bold uppercase tracking-wider transition-all whitespace-nowrap ${visibleColumns.size === statusOrder.length ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"}`}

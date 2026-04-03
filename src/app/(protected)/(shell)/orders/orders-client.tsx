@@ -3,7 +3,7 @@
 import { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Plus, Search, ChevronRight, ClipboardList, Building2, Upload, FileSpreadsheet, CheckCircle, AlertTriangle } from "lucide-react";
+import { Plus, X, Search, ChevronRight, ClipboardList, Building2, Upload, FileSpreadsheet, CheckCircle, AlertTriangle } from "lucide-react";
 import { StatusBadge, Badge } from "@/components/ui/badge";
 import { ORDER_STATUS_DISPLAY, formatDate } from "@/types/supply-chain";
 import { createOrder, updateOrder } from "@/lib/actions/orders";
@@ -74,10 +74,11 @@ export function OrdersClient({
     setNewRef(""); setNewClient(""); setNewSupplierId(null); setNewDueDate("");
     setDraftLines([emptyLine()]);
     setShowCreate(false);
+    setShowPOUpload(true);
   }
 
-  // PO upload — supports both Excel and PDF
-  const [showPOUpload, setShowPOUpload] = useState(false);
+  // PO upload — supports both Excel and PDF; shown by default, hidden when Manual PO form is open
+  const [showPOUpload, setShowPOUpload] = useState(true);
   const [poPreview, setPOPreview] = useState<POParseResult | null>(null);
   const [poPdfPreview, setPOPdfPreview] = useState<ParsedPOPdf | null>(null);
   const [poImportResult, setPOImportResult] = useState<{ orderRef: string; supplierMatched: string | null; supplierNotFound: string | null; linesCreated: number; totalQty: number; totalAmount?: number } | null>(null);
@@ -85,8 +86,8 @@ export function OrdersClient({
   const [poDragging, setPoDragging] = useState(false);
 
   useEffect(() => {
-    if (showUploadOnLoad) setShowPOUpload(true);
-    if (showCreateOnLoad) setShowCreate(true);
+    if (showCreateOnLoad) { setShowCreate(true); setShowPOUpload(false); }
+    else if (showUploadOnLoad) { setShowPOUpload(true); setShowCreate(false); }
   }, [showUploadOnLoad, showCreateOnLoad]);
 
   function handlePODrop(e: React.DragEvent) {
@@ -250,27 +251,27 @@ export function OrdersClient({
         {isAdmin && (
           <div className="flex items-center gap-2">
             <button
-              onClick={() => { setShowPOUpload(!showPOUpload); setShowCreate(false); }}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-[11px] font-semibold uppercase tracking-wider bg-foreground text-background hover:bg-foreground/90 transition-colors"
-            >
-              <Upload size={14} /> Upload PO
-            </button>
-            <button
-              onClick={() => { setShowCreate(!showCreate); setShowPOUpload(false); }}
+              onClick={() => {
+                const opening = !showCreate;
+                setShowCreate(opening);
+                setShowPOUpload(!opening);
+              }}
               className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-[11px] font-semibold uppercase tracking-wider text-white transition-colors"
-              style={{ backgroundColor: "hsl(217 91% 60%)" }}
+              style={{ backgroundColor: showCreate ? "hsl(217 91% 60% / 0.7)" : "hsl(217 91% 60%)" }}
             >
-              <Plus size={14} /> Manual Order
+              {showCreate ? <><X size={14} /> Close</> : <><Plus size={14} /> Manual PO</>}
             </button>
           </div>
         )}
       </div>
       )}
 
-      {/* Create form */}
-      {/* PO Upload */}
+      {/* Panel slot — Upload PO or New PO form, mutually exclusive */}
+      {(showPOUpload || showCreate) && (
+      <div className="mb-6">
+
       {showPOUpload && (
-        <div className="bg-card border border-border rounded-xl p-5 mb-6">
+        <div className="bg-card border border-border rounded-xl p-5">
           <h3 className="text-[12px] font-bold uppercase tracking-wider text-foreground mb-3">Upload Purchase Order</h3>
           <p className="text-[10px] text-muted-foreground mb-4">
             Upload a Sheep Inc PO Excel file (.xlsx). The system will extract the PO number, supplier, SKUs, and quantities automatically.
@@ -475,7 +476,7 @@ export function OrdersClient({
       )}
 
       {showCreate && (
-        <div className="bg-card border border-border rounded-xl p-5 mb-6 space-y-5">
+        <div className="bg-card border border-border rounded-xl p-5 space-y-5">
           <h3 className="text-[12px] font-bold uppercase tracking-wider text-foreground">New Manual Order</h3>
 
           {/* ── Order header ── */}
@@ -600,6 +601,9 @@ export function OrdersClient({
             <button onClick={resetCreate} className="px-4 py-2 rounded-lg text-[11px] text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
           </div>
         </div>
+      )}
+
+      </div>
       )}
 
       {/* Search + status filter */}

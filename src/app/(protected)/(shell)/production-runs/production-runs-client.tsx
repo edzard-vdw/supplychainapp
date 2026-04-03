@@ -429,7 +429,7 @@ export function ProductionRunsClient({
         {/* Manufacturing Config */}
         <div>
           <p className="text-[9px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-2">Manufacturing Config</p>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-6 gap-2">
             <div>
               <label className="block text-[8px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1">Washing</label>
               <input value={newWashing} onChange={(e) => setNewWashing(e.target.value)} className="w-full h-[34px] px-2.5 bg-background border border-border rounded-lg text-[11px] text-foreground outline-none focus:ring-1 focus:ring-ring" placeholder="Program A" />
@@ -647,7 +647,7 @@ export function ProductionRunsClient({
           <><p className="text-[9px] font-mono-brand uppercase tracking-widest text-muted-foreground">Product &amp; Run Details</p></>
           )}
           {batchLines.length === 0 && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-3">
             <div>
               <label className="block text-[9px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1.5">Run Code</label>
               <input value={newCode} onChange={(e) => setNewCode(e.target.value)} className="w-full h-[38px] px-3 bg-background border border-border rounded-lg text-[12px] font-mono-brand text-foreground outline-none focus:ring-1 focus:ring-ring" placeholder="AUTO" />
@@ -948,7 +948,7 @@ export function ProductionRunsClient({
               return (
                 <div
                   key={status}
-                  className="flex flex-col w-[220px] shrink-0 bg-card border border-border rounded-xl overflow-hidden"
+                  className="flex flex-col w-[calc(100vw-48px)] sm:w-[220px] shrink-0 bg-card border border-border rounded-xl overflow-hidden"
                   onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add("ring-2", "ring-primary/30"); }}
                   onDragLeave={(e) => { e.currentTarget.classList.remove("ring-2", "ring-primary/30"); }}
                   onDrop={(e) => {

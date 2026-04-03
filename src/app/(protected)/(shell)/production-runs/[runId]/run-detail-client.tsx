@@ -716,7 +716,7 @@ export function RunDetailClient({
 
               {run.yarnUsedKg != null ? (
                 /* Already recorded — show summary */
-                <div className="grid grid-cols-3 gap-4 mb-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
                   <div>
                     <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-0.5">Total Used</p>
                     <p className="text-[22px] font-bold tabular-nums text-foreground leading-tight">

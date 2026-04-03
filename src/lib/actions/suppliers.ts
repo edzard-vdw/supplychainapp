@@ -7,6 +7,7 @@ import { z } from "zod";
 // ─── Schemas ─────────────────────────────────────────────────────────────────
 
 const SUPPLIER_TYPES = ["GROWER", "SCOURER", "SPINNER", "KNITTER", "FINISHER", "RETAILER", "OTHER"] as const;
+const SUPPORTED_LANGUAGES = ["en", "ro", "bg", "pt"] as const;
 
 const SupplierCreateSchema = z.object({
   name: z.string().min(1, "Name is required").max(200),
@@ -20,6 +21,7 @@ const SupplierCreateSchema = z.object({
     .nullable()
     .transform((v) => (v === "" ? null : v))
     .pipe(z.string().email("Valid email required").nullable().optional()),
+  language: z.enum(SUPPORTED_LANGUAGES).optional().default("en"),
 });
 
 const SupplierUpdateSchema = z.object({
@@ -34,6 +36,7 @@ const SupplierUpdateSchema = z.object({
     .optional()
     .transform((v) => (v === "" ? null : v))
     .pipe(z.string().email().nullable().optional()),
+  language: z.enum(SUPPORTED_LANGUAGES).optional(),
 });
 
 // ─── Queries ─────────────────────────────────────────────────────────────────
@@ -64,6 +67,7 @@ export async function createSupplier(data: Record<string, unknown>) {
         contactName: parsed.contactName ?? null,
         contactEmail: parsed.contactEmail ?? null,
         isActive: true,
+        language: parsed.language ?? "en",
       },
     });
 
@@ -123,5 +127,23 @@ export async function reactivateSupplier(id: number) {
     return { success: true };
   } catch {
     return { success: false, error: "Failed to reactivate supplier" };
+  }
+}
+
+// ─── Set Language (cascades to all supplier users) ───────────────────────────
+
+export async function setSupplierLanguage(id: number, language: string) {
+  if (!SUPPORTED_LANGUAGES.includes(language as typeof SUPPORTED_LANGUAGES[number])) {
+    return { success: false, error: "Unsupported language" };
+  }
+  try {
+    await prisma.$transaction([
+      prisma.supplier.update({ where: { id }, data: { language } }),
+      prisma.user.updateMany({ where: { supplierId: id }, data: { language } }),
+    ]);
+    revalidatePath("/settings");
+    return { success: true };
+  } catch {
+    return { success: false, error: "Failed to update supplier language" };
   }
 }

@@ -5,8 +5,10 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ScanLine, ChevronRight, Clock, AlertCircle, List, GitBranch } from "lucide-react";
 import { acceptJobAndCreateRun } from "@/lib/actions/orders";
-import { RUN_STATUS_DISPLAY, ORDER_STATUS_DISPLAY, formatDate } from "@/types/supply-chain";
+import { ORDER_STATUS_DISPLAY, formatDate } from "@/types/supply-chain";
 import { StatusBadge } from "@/components/ui/badge";
+import { t, getHelpContent } from "@/lib/i18n";
+import { ContextualHelp } from "@/components/ui/contextual-help";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -55,11 +57,11 @@ const STATUS_STYLE: Record<string, { bg: string; text: string; dot: string; bar:
 
 // ─── Run Card (used in both Jobs and Pipeline tabs) ───────────────────────────
 
-function RunCard({ run, compact = false }: { run: ActiveRun; compact?: boolean }) {
+function RunCard({ run, language, compact = false }: { run: ActiveRun; language: string; compact?: boolean }) {
   const style = STATUS_STYLE[run.status] ?? STATUS_STYLE.PLANNED;
   const pct = run.quantity > 0 ? Math.round((run.unitsProduced / run.quantity) * 100) : 0;
   const canScan = run.status === "QC";
-  const display = RUN_STATUS_DISPLAY[run.status];
+  const statusLabel = t(`status.${run.status}`, language);
 
   if (compact) {
     return (
@@ -96,19 +98,19 @@ function RunCard({ run, compact = false }: { run: ActiveRun; compact?: boolean }
             <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
               {run.order?.orderRef ?? "—"}
               {run.productName ? ` · ${run.productName}` : ""}
-              {run.order?.dueDate ? ` · Due ${formatDate(run.order.dueDate)}` : ""}
+              {run.order?.dueDate ? ` · ${t("jobs.due", language)} ${formatDate(run.order.dueDate)}` : ""}
             </p>
           </div>
           <span className={`shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${style.bg} ${style.text}`}>
             <span className={`w-1.5 h-1.5 rounded-full ${style.dot}`} />
-            {display?.label ?? run.status}
+            {statusLabel}
           </span>
         </div>
 
         {/* Progress bar */}
         <div className="mb-3">
           <div className="flex justify-between text-[10px] text-muted-foreground mb-1.5">
-            <span>{run.unitsProduced} / {run.quantity} units</span>
+            <span>{run.unitsProduced} / {run.quantity} {t("jobs.units", language)}</span>
             <span>{pct}%</span>
           </div>
           <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
@@ -122,13 +124,13 @@ function RunCard({ run, compact = false }: { run: ActiveRun; compact?: boolean }
             canScan ? "bg-foreground text-background" : "bg-muted/50 text-muted-foreground/40 cursor-not-allowed"
           }`}>
             <ScanLine size={12} strokeWidth={2} />
-            Start Scanning
+            {t("cta.scan", language)}
           </div>
           {!canScan && run.status === "PLANNED" && (
-            <span className="text-[10px] text-muted-foreground">Start production first</span>
+            <span className="text-[10px] text-muted-foreground">{t("run.planned.desc_short", language)}</span>
           )}
           {!canScan && run.status === "IN_PRODUCTION" && (
-            <span className="text-[10px] text-muted-foreground">Move to QC to scan</span>
+            <span className="text-[10px] text-muted-foreground">{t("run.in_production.desc_short", language)}</span>
           )}
           <ChevronRight size={14} className="text-muted-foreground" />
         </div>
@@ -145,6 +147,7 @@ function JobsTab({
   isPending,
   acceptingId,
   error,
+  language,
   onAccept,
 }: {
   pendingJobs: PendingJob[];
@@ -152,6 +155,7 @@ function JobsTab({
   isPending: boolean;
   acceptingId: number | null;
   error: string | null;
+  language: string;
   onAccept: (id: number) => void;
 }) {
   const runsByStatus = RUN_STATUS_ORDER.reduce<Record<string, ActiveRun[]>>((acc, s) => {
@@ -166,7 +170,7 @@ function JobsTab({
         <div>
           <div className="flex items-center gap-2 mb-3">
             <AlertCircle size={14} className="text-badge-orange-text" />
-            <h2 className="text-[11px] font-bold uppercase tracking-wider text-foreground">New Jobs</h2>
+            <h2 className="text-[11px] font-bold uppercase tracking-wider text-foreground">{t("jobs.pending_title", language)}</h2>
             <span className="w-5 h-5 rounded-full bg-badge-orange-text text-white flex items-center justify-center text-[10px] font-bold">
               {pendingJobs.length}
             </span>
@@ -185,7 +189,7 @@ function JobsTab({
                         <p className="text-[11px] text-muted-foreground mt-0.5">
                           {job.client ?? "—"}
                           {job.dueDate && (
-                            <span className="text-badge-orange-text font-medium"> · Due {formatDate(job.dueDate)}</span>
+                            <span className="text-badge-orange-text font-medium"> · {t("jobs.due", language)} {formatDate(job.dueDate)}</span>
                           )}
                         </p>
                       </div>
@@ -193,12 +197,12 @@ function JobsTab({
                         <p className="text-[20px] font-bold tabular-nums text-foreground leading-tight">
                           {job.totalQuantity.toLocaleString()}
                         </p>
-                        <p className="text-[9px] text-muted-foreground uppercase tracking-wider">units</p>
+                        <p className="text-[9px] text-muted-foreground uppercase tracking-wider">{t("jobs.units", language)}</p>
                       </div>
                     </div>
                     {(products || sizes) && (
                       <p className="text-[11px] text-muted-foreground mb-4">
-                        {products}{sizes ? ` · Sizes: ${sizes}` : ""}
+                        {products}{sizes ? ` · ${t("jobs.sizes", language)}: ${sizes}` : ""}
                         {job._count.orderLines > 1 && ` · ${job._count.orderLines} lines`}
                       </p>
                     )}
@@ -208,13 +212,13 @@ function JobsTab({
                         disabled={isPending}
                         className="flex-1 py-3 rounded-xl bg-foreground text-background text-[12px] font-bold uppercase tracking-wider disabled:opacity-50 transition-opacity active:scale-95"
                       >
-                        {isAccepting ? "Accepting…" : "Accept Job →"}
+                        {isAccepting ? "…" : `${t("cta.accept_job", language)} →`}
                       </button>
                       <Link
                         href={`/orders/${job.id}/po-view`}
                         className="px-4 py-3 rounded-xl border border-border text-[11px] font-medium text-muted-foreground hover:text-foreground transition-colors"
                       >
-                        View PO
+                        {t("cta.view_details", language)}
                       </Link>
                     </div>
                     {error && acceptingId === job.id && (
@@ -233,7 +237,7 @@ function JobsTab({
         <div>
           <div className="flex items-center gap-2 mb-3">
             <Clock size={14} className="text-muted-foreground" />
-            <h2 className="text-[11px] font-bold uppercase tracking-wider text-foreground">Active Jobs</h2>
+            <h2 className="text-[11px] font-bold uppercase tracking-wider text-foreground">{t("jobs.active_title", language)}</h2>
             <span className="text-[10px] text-muted-foreground">({activeRuns.length})</span>
           </div>
           <div className="space-y-6">
@@ -241,15 +245,16 @@ function JobsTab({
               const runs = runsByStatus[status];
               if (!runs || runs.length === 0) return null;
               const style = STATUS_STYLE[status];
+              const statusLabel = t(`status.${status}`, language);
               return (
                 <div key={status}>
                   <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider mb-2 ${style.bg} ${style.text}`}>
                     <span className={`w-1.5 h-1.5 rounded-full ${style.dot}`} />
-                    {RUN_STATUS_DISPLAY[status]?.label ?? status}
+                    {statusLabel}
                     <span className="opacity-60">({runs.length})</span>
                   </div>
                   <div className="space-y-2">
-                    {runs.map((run) => <RunCard key={run.id} run={run} />)}
+                    {runs.map((run) => <RunCard key={run.id} run={run} language={language} />)}
                   </div>
                 </div>
               );
@@ -261,8 +266,8 @@ function JobsTab({
       {/* Empty */}
       {pendingJobs.length === 0 && activeRuns.length === 0 && (
         <div className="text-center py-20 border border-dashed border-border rounded-xl">
-          <p className="text-[14px] font-semibold text-foreground mb-1">No jobs yet</p>
-          <p className="text-[12px] text-muted-foreground">New orders will appear here when assigned to you</p>
+          <p className="text-[14px] font-semibold text-foreground mb-1">{t("jobs.pending_empty", language)}</p>
+          <p className="text-[12px] text-muted-foreground">{t("jobs.active_empty", language)}</p>
         </div>
       )}
     </div>
@@ -271,12 +276,12 @@ function JobsTab({
 
 // ─── Orders Tab (all POs with status) ────────────────────────────────────────
 
-function OrdersTab({ orders }: { orders: OrderSummary[] }) {
+function OrdersTab({ orders, language }: { orders: OrderSummary[]; language: string }) {
   if (orders.length === 0) {
     return (
       <div className="text-center py-20 border border-dashed border-border rounded-xl">
-        <p className="text-[14px] font-semibold text-foreground mb-1">No orders yet</p>
-        <p className="text-[12px] text-muted-foreground">Orders assigned to you will appear here</p>
+        <p className="text-[14px] font-semibold text-foreground mb-1">{t("jobs.active_empty", language)}</p>
+        <p className="text-[12px] text-muted-foreground">{t("jobs.accept_prompt", language)}</p>
       </div>
     );
   }
@@ -286,16 +291,17 @@ function OrdersTab({ orders }: { orders: OrderSummary[] }) {
       <table className="w-full text-[12px]">
         <thead className="bg-secondary/30 border-b border-border">
           <tr>
-            <th className="text-left px-4 py-3 text-[9px] font-mono uppercase tracking-wider text-muted-foreground">PO Ref</th>
-            <th className="text-left px-3 py-3 text-[9px] font-mono uppercase tracking-wider text-muted-foreground hidden sm:table-cell">Client</th>
+            <th className="text-left px-4 py-3 text-[9px] font-mono uppercase tracking-wider text-muted-foreground">{t("order.ref", language)}</th>
+            <th className="text-left px-3 py-3 text-[9px] font-mono uppercase tracking-wider text-muted-foreground hidden sm:table-cell">{t("order.client", language)}</th>
             <th className="text-left px-3 py-3 text-[9px] font-mono uppercase tracking-wider text-muted-foreground">Status</th>
-            <th className="text-left px-3 py-3 text-[9px] font-mono uppercase tracking-wider text-muted-foreground hidden sm:table-cell">Due</th>
-            <th className="text-right px-4 py-3 text-[9px] font-mono uppercase tracking-wider text-muted-foreground">Units</th>
+            <th className="text-left px-3 py-3 text-[9px] font-mono uppercase tracking-wider text-muted-foreground hidden sm:table-cell">{t("order.due", language)}</th>
+            <th className="text-right px-4 py-3 text-[9px] font-mono uppercase tracking-wider text-muted-foreground">{t("jobs.units", language)}</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-border">
           {orders.map((order) => {
             const display = ORDER_STATUS_DISPLAY[order.status];
+            const statusLabel = t(`order.status.${order.status}`, language);
             return (
               <tr key={order.id} className="hover:bg-secondary/20 transition-colors">
                 <td className="px-4 py-3">
@@ -309,10 +315,10 @@ function OrdersTab({ orders }: { orders: OrderSummary[] }) {
                 <td className="px-3 py-3">
                   {display ? (
                     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${display.bgClass} ${display.textClass}`}>
-                      {display.label}
+                      {statusLabel}
                     </span>
                   ) : (
-                    <span className="text-muted-foreground">{order.status}</span>
+                    <span className="text-muted-foreground">{statusLabel || order.status}</span>
                   )}
                 </td>
                 <td className="px-3 py-3 text-muted-foreground hidden sm:table-cell">
@@ -332,7 +338,7 @@ function OrdersTab({ orders }: { orders: OrderSummary[] }) {
 
 // ─── Pipeline Tab (kanban-style by stage) ────────────────────────────────────
 
-function PipelineTab({ activeRuns }: { activeRuns: ActiveRun[] }) {
+function PipelineTab({ activeRuns, language }: { activeRuns: ActiveRun[]; language: string }) {
   const [activeStage, setActiveStage] = useState(RUN_STATUS_ORDER[0]);
   const runsByStatus = RUN_STATUS_ORDER.reduce<Record<string, ActiveRun[]>>((acc, s) => {
     acc[s] = activeRuns.filter((r) => r.status === s);
@@ -347,6 +353,7 @@ function PipelineTab({ activeRuns }: { activeRuns: ActiveRun[] }) {
           const style = STATUS_STYLE[status];
           const count = runsByStatus[status]?.length ?? 0;
           const isActive = activeStage === status;
+          const statusLabel = t(`status.${status}`, language);
           return (
             <button
               key={status}
@@ -358,7 +365,7 @@ function PipelineTab({ activeRuns }: { activeRuns: ActiveRun[] }) {
               }`}
             >
               <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isActive ? style.dot : "bg-muted-foreground/40"}`} />
-              {RUN_STATUS_DISPLAY[status]?.label ?? status}
+              {statusLabel}
               <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold ${
                 isActive ? "bg-white/30 text-inherit" : "bg-muted text-muted-foreground"
               }`}>
@@ -376,23 +383,23 @@ function PipelineTab({ activeRuns }: { activeRuns: ActiveRun[] }) {
           return (
             <div className="text-center py-16 border border-dashed border-border rounded-xl">
               <p className="text-[13px] font-semibold text-foreground mb-1">
-                Nothing in {RUN_STATUS_DISPLAY[activeStage]?.label}
+                {t("jobs.pipeline_empty", language)}
               </p>
-              <p className="text-[11px] text-muted-foreground">Runs will appear here as they progress</p>
+              <p className="text-[11px] text-muted-foreground">{t("jobs.accept_prompt", language)}</p>
             </div>
           );
         }
         return (
           <div className="space-y-2">
-            {runs.map((run) => <RunCard key={run.id} run={run} />)}
+            {runs.map((run) => <RunCard key={run.id} run={run} language={language} />)}
           </div>
         );
       })()}
 
       {activeRuns.length === 0 && (
         <div className="text-center py-16 border border-dashed border-border rounded-xl">
-          <p className="text-[14px] font-semibold text-foreground mb-1">No active runs</p>
-          <p className="text-[12px] text-muted-foreground">Accept a job to create your first production run</p>
+          <p className="text-[14px] font-semibold text-foreground mb-1">{t("jobs.active_empty", language)}</p>
+          <p className="text-[12px] text-muted-foreground">{t("jobs.accept_prompt", language)}</p>
         </div>
       )}
     </div>
@@ -405,11 +412,13 @@ export function JobsView({
   pendingJobs,
   activeRuns,
   allOrders,
+  language = "en",
 }: {
   pendingJobs: PendingJob[];
   activeRuns: ActiveRun[];
   allOrders: OrderSummary[];
   yarnLots: unknown[]; // consumed by run-detail, not needed here directly
+  language?: string;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -433,18 +442,28 @@ export function JobsView({
 
   const pendingCount = pendingJobs.length;
   const tabDefs = [
-    { key: "jobs" as const, label: "Jobs", icon: Clock, badge: pendingCount > 0 ? pendingCount : null },
-    { key: "orders" as const, label: "Orders", icon: List, badge: null },
-    { key: "pipeline" as const, label: "Pipeline", icon: GitBranch, badge: null },
+    { key: "jobs" as const, label: t("nav.jobs", language), icon: Clock, badge: pendingCount > 0 ? pendingCount : null },
+    { key: "orders" as const, label: t("nav.orders", language), icon: List, badge: null },
+    { key: "pipeline" as const, label: t("nav.pipeline", language), icon: GitBranch, badge: null },
   ];
+
+  const help = getHelpContent("jobs", language);
 
   return (
     <div className="px-4 py-6 max-w-[700px] mx-auto">
       {/* Header */}
       <div className="mb-5">
         <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Production</p>
-        <h1 className="text-[22px] font-bold uppercase tracking-wide text-foreground">Jobs</h1>
+        <h1 className="text-[22px] font-bold uppercase tracking-wide text-foreground">{t("nav.jobs", language)}</h1>
       </div>
+
+      {/* Contextual help */}
+      <ContextualHelp
+        pageId="jobs"
+        title={help.title}
+        steps={help.steps}
+        tip={help.tip}
+      />
 
       {/* Tabs */}
       <div className="flex gap-1 mb-6 bg-secondary/40 p-1 rounded-xl">
@@ -477,11 +496,12 @@ export function JobsView({
           isPending={isPending}
           acceptingId={acceptingId}
           error={error}
+          language={language}
           onAccept={handleAccept}
         />
       )}
-      {tab === "orders" && <OrdersTab orders={allOrders} />}
-      {tab === "pipeline" && <PipelineTab activeRuns={activeRuns} />}
+      {tab === "orders" && <OrdersTab orders={allOrders} language={language} />}
+      {tab === "pipeline" && <PipelineTab activeRuns={activeRuns} language={language} />}
     </div>
   );
 }

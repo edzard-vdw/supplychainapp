@@ -12,7 +12,9 @@ import {
   isAdminOnlyStatus,
   formatDate,
 } from "@/types/supply-chain";
-import { updateProductionRun, generateBatchTag, startProduction } from "@/lib/actions/production-runs";
+import { updateProductionRun, generateBatchTag, startProduction, saveYarnUsage } from "@/lib/actions/production-runs";
+import { t, getHelpContent } from "@/lib/i18n";
+import { ContextualHelp } from "@/components/ui/contextual-help";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -49,6 +51,9 @@ type RunFull = {
   // QC stage
   finisherName: string | null;
   finishedDate: string | null;
+  // Post-QC yarn usage
+  yarnUsedKg: number | null;
+  yarnStockDeducted: boolean;
   // Dates
   startDate: string | null;
   expectedExFactory: string | null;
@@ -103,11 +108,13 @@ export function RunDetailClient({
   orderLines,
   yarnLots,
   role,
+  language = "en",
 }: {
   run: RunFull;
   orderLines: OrderLineWithColor[];
   yarnLots: YarnLot[];
   role: string;
+  language?: string;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -154,6 +161,11 @@ export function RunDetailClient({
     expectedExFactory: "",
   });
 
+  // ── Post-QC yarn usage ──
+  const [yarnUsedInput, setYarnUsedInput] = useState(run.yarnUsedKg != null ? String(run.yarnUsedKg) : "");
+  const [savingYarnUsed, setSavingYarnUsed] = useState(false);
+  const [yarnSaved, setYarnSaved] = useState(false);
+
   // ── QC: finisher name ──
   const [finisherNameInput, setFinisherNameInput] = useState(run.finisherName ?? "");
   const [savingFinisher, setSavingFinisher] = useState(false);
@@ -170,6 +182,23 @@ export function RunDetailClient({
     startTransition(async () => {
       await updateProductionRun(run.id, { expectedExFactory: exFactoryInput });
       router.refresh();
+    });
+  }
+
+  function handleSaveYarnUsage() {
+    const kg = parseFloat(yarnUsedInput);
+    if (isNaN(kg) || kg < 0) return;
+    setSavingYarnUsed(true);
+    startTransition(async () => {
+      const result = await saveYarnUsage(run.id, kg);
+      setSavingYarnUsed(false);
+      if (result.success) {
+        setYarnSaved(true);
+        setTimeout(() => setYarnSaved(false), 2500);
+        router.refresh();
+      } else {
+        alert(result.error ?? "Failed to save yarn usage");
+      }
     });
   }
 
@@ -305,6 +334,12 @@ export function RunDetailClient({
           </button>
         )}
       </div>
+
+      {/* ── Contextual help (supplier only) ── */}
+      {role !== "ADMIN" && (() => {
+        const help = getHelpContent("run", language);
+        return <ContextualHelp pageId="run" title={help.title} steps={help.steps} tip={help.tip} />;
+      })()}
 
       {/* ── Status Pipeline (compact) ── */}
       <div className="bg-card border border-border rounded-xl p-4 mb-5 overflow-x-auto">
@@ -484,7 +519,7 @@ export function RunDetailClient({
               />
             </div>
             <p className="text-[11px] text-muted-foreground">
-              Scanning is unlocked at the Quality Check / Scan stage.
+              {t("run.in_production.desc", language)}
             </p>
           </div>
 
@@ -501,14 +536,14 @@ export function RunDetailClient({
             {/* Who is scanning — finisher name prompt */}
             <div className="mb-4">
               <label className="block text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-1.5">
-                Who is scanning?
+                {t("scan.finisher_label", language)}
               </label>
               <div className="flex gap-2">
                 <input
                   type="text"
                   value={finisherNameInput}
                   onChange={(e) => setFinisherNameInput(e.target.value)}
-                  placeholder="Finisher / operator name…"
+                  placeholder={t("scan.finisher_prompt", language)}
                   className="flex-1 px-3 py-2 rounded-lg bg-secondary border border-border text-[12px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-foreground/30"
                 />
                 {finisherNameInput !== run.finisherName && finisherNameInput && (
@@ -517,7 +552,7 @@ export function RunDetailClient({
                     disabled={isPending || savingFinisher}
                     className="px-3 py-2 rounded-lg bg-foreground text-background text-[11px] font-bold disabled:opacity-50"
                   >
-                    Save
+                    {t("cta.save", language)}
                   </button>
                 )}
               </div>
@@ -529,7 +564,7 @@ export function RunDetailClient({
               className="w-full flex items-center justify-center gap-2 py-4 rounded-xl bg-foreground text-background text-[13px] font-bold uppercase tracking-wider hover:opacity-90 transition-opacity mb-4"
             >
               <ScanLine size={18} strokeWidth={2} />
-              Open Scanner
+              {t("cta.scan", language)}
             </Link>
 
             {/* Progress */}
@@ -625,26 +660,122 @@ export function RunDetailClient({
             </div>
           </div>
           {role !== "ADMIN" && (
-            <p className="text-[11px] text-muted-foreground text-center">Awaiting receipt confirmation from admin</p>
+            <p className="text-[11px] text-muted-foreground text-center">{t("run.shipped.desc", language)}</p>
           )}
         </div>
       )}
 
-      {/* ── RECEIVED ── */}
+      {/* ── RECEIVED (terminal state — also covers legacy COMPLETED) ── */}
       {(run.status === "RECEIVED" || run.status === "COMPLETED") && (
-        <div className="bg-card border border-border rounded-xl p-5 mb-5">
-          <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-3">Received</p>
-          <div className="grid grid-cols-2 gap-4 mb-4">
-            <div>
-              <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-0.5">Units</p>
-              <p className="text-[20px] font-bold tabular-nums text-foreground">{run.quantity.toLocaleString()}</p>
-            </div>
-            <div>
-              <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-0.5">Tagged</p>
-              <p className="text-[20px] font-bold tabular-nums text-badge-green-text">{run._count.garments}</p>
+        <>
+          {/* Completion summary */}
+          <div className="bg-card border border-border rounded-xl p-5 mb-5">
+            <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-3">Received</p>
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              <div>
+                <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-0.5">Units</p>
+                <p className="text-[20px] font-bold tabular-nums text-foreground">{run.quantity.toLocaleString()}</p>
+              </div>
+              <div>
+                <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-0.5">Tagged</p>
+                <p className="text-[20px] font-bold tabular-nums text-badge-green-text">{run._count.garments}</p>
+              </div>
+              {run.finisherName && (
+                <div>
+                  <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-0.5">Finisher</p>
+                  <p className="text-[13px] font-semibold text-foreground">{run.finisherName}</p>
+                </div>
+              )}
+              {run.finishedDate && (
+                <div>
+                  <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-0.5">Finished</p>
+                  <p className="text-[13px] font-semibold text-foreground">{formatDate(run.finishedDate)}</p>
+                </div>
+              )}
             </div>
           </div>
-        </div>
+
+          {/* Yarn Usage — admin only */}
+          {role === "ADMIN" && (
+            <div className="bg-card border border-border rounded-xl p-5 mb-5">
+              <div className="flex items-start justify-between mb-3">
+                <div>
+                  <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground">Yarn Usage</p>
+                  {run.yarnColourCode && (
+                    <p className="text-[10px] text-muted-foreground mt-0.5">
+                      {run.yarnColourCode}{run.yarnLotNumber ? ` · Lot ${run.yarnLotNumber}` : ""}
+                    </p>
+                  )}
+                </div>
+                {run.yarnStockDeducted && (
+                  <span className="px-2.5 py-1 rounded-lg bg-badge-green-bg text-badge-green-text text-[9px] font-bold uppercase tracking-wider">
+                    Stock Updated ✓
+                  </span>
+                )}
+              </div>
+
+              {run.yarnUsedKg != null ? (
+                /* Already recorded — show summary */
+                <div className="grid grid-cols-3 gap-4 mb-4">
+                  <div>
+                    <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-0.5">Total Used</p>
+                    <p className="text-[22px] font-bold tabular-nums text-foreground leading-tight">
+                      {run.yarnUsedKg.toFixed(2)}
+                      <span className="text-[12px] font-normal text-muted-foreground ml-1">kg</span>
+                    </p>
+                  </div>
+                  {run.quantity > 0 && (
+                    <div>
+                      <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-0.5">Per Unit</p>
+                      <p className="text-[22px] font-bold tabular-nums text-foreground leading-tight">
+                        {(run.yarnUsedKg / run.quantity).toFixed(3)}
+                        <span className="text-[12px] font-normal text-muted-foreground ml-1">kg</span>
+                      </p>
+                    </div>
+                  )}
+                  {run._count.garments > 0 && (
+                    <div>
+                      <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-0.5">Per Tagged</p>
+                      <p className="text-[22px] font-bold tabular-nums text-foreground leading-tight">
+                        {(run.yarnUsedKg / run._count.garments).toFixed(3)}
+                        <span className="text-[12px] font-normal text-muted-foreground ml-1">kg</span>
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="text-[11px] text-muted-foreground mb-4">
+                  Enter the actual yarn consumed for this run to update stock levels.
+                </p>
+              )}
+
+              {/* Input to enter / update yarn usage */}
+              <div className="flex gap-2 items-end">
+                <div className="flex-1">
+                  <label className="block text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-1.5">
+                    {run.yarnUsedKg != null ? "Update Actual Usage (kg)" : "Actual Yarn Used (kg)"}
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.001"
+                    value={yarnUsedInput}
+                    onChange={(e) => setYarnUsedInput(e.target.value)}
+                    placeholder="e.g. 47.5"
+                    className="w-full px-3 py-2.5 rounded-lg bg-secondary border border-border text-[13px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-foreground/30 tabular-nums"
+                  />
+                </div>
+                <button
+                  onClick={handleSaveYarnUsage}
+                  disabled={isPending || savingYarnUsed || !yarnUsedInput || isNaN(parseFloat(yarnUsedInput))}
+                  className="px-4 py-2.5 rounded-lg bg-foreground text-background text-[11px] font-bold uppercase tracking-wider disabled:opacity-40 hover:opacity-90 transition-opacity shrink-0"
+                >
+                  {yarnSaved ? "Saved ✓" : savingYarnUsed ? "Saving…" : "Save"}
+                </button>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {/* ── Size Breakdown Table (always) ── */}
@@ -704,7 +835,7 @@ export function RunDetailClient({
       )}
 
       {/* ── Manufacturing details (shown from IN_PRODUCTION onward, collapsed) ── */}
-      {["QC", "SHIPPED", "RECEIVED"].includes(run.status) && (run.yarnColourCode || run.machineGauge || run.washingProgram) && (
+      {["QC", "SHIPPED", "RECEIVED", "COMPLETED"].includes(run.status) && (run.yarnColourCode || run.machineGauge || run.washingProgram) && (
         <div className="bg-card border border-border rounded-xl p-5 mb-5">
           <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-3">Manufacturing</p>
           <div className="grid grid-cols-2 gap-x-6 gap-y-2">
@@ -729,7 +860,7 @@ export function RunDetailClient({
       )}
 
       {/* ── Garments (shown in QC+) ── */}
-      {["QC", "SHIPPED", "RECEIVED"].includes(run.status) && (
+      {["QC", "SHIPPED", "RECEIVED", "COMPLETED"].includes(run.status) && (
         <div className="bg-card border border-border rounded-xl p-5 mb-5">
           <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-3">
             Garments ({run._count.garments})
@@ -764,14 +895,14 @@ export function RunDetailClient({
           btn = (
             <button onClick={openStartModal} disabled={isPending}
               className="w-full py-4 rounded-xl bg-foreground text-background text-[13px] font-bold uppercase tracking-wider flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50">
-              Start Production <ChevronRight size={16} strokeWidth={2.5} />
+              {t("cta.start_production", language)} <ChevronRight size={16} strokeWidth={2.5} />
             </button>
           );
         } else if (run.status === "IN_PRODUCTION" && allowedStatuses.includes("QC")) {
           btn = (
             <button onClick={() => handleStatusAdvance("QC")} disabled={isPending}
               className="w-full py-4 rounded-xl bg-badge-purple-text text-white text-[13px] font-bold uppercase tracking-wider flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50">
-              {isPending ? "Updating…" : <>"Production Complete → QC / Scan" <ChevronRight size={16} strokeWidth={2.5} /></>}
+              {isPending ? "…" : <>{t("cta.production_complete", language)} <ChevronRight size={16} strokeWidth={2.5} /></>}
             </button>
           );
         } else if (run.status === "QC" && allowedStatuses.includes("SHIPPED")) {
@@ -781,21 +912,24 @@ export function RunDetailClient({
             <div className="w-full space-y-2">
               {!scanComplete && (
                 <p className="text-center text-[11px] text-badge-orange-text font-medium">
-                  {scanned} / {run.quantity} garments scanned — scan all before shipping
+                  {scanned} / {run.quantity} {t("scan.progress", language)} — {t("run.qc.desc", language)}
                 </p>
               )}
               <button onClick={() => handleStatusAdvance("SHIPPED")} disabled={isPending || !scanComplete}
                 className="w-full py-4 rounded-xl bg-badge-sky-text text-white text-[13px] font-bold uppercase tracking-wider flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50">
-                {isPending ? "Updating…" : <>"Scanning Complete → Ship" <ChevronRight size={16} strokeWidth={2.5} /></>}
+                {isPending ? "…" : <>{t("cta.scanning_complete", language)} <ChevronRight size={16} strokeWidth={2.5} /></>}
               </button>
             </div>
           );
         } else if (run.status === "SHIPPED" && role === "ADMIN") {
           btn = (
-            <Link href={`/production-runs/${run.id}/receive`}
-              className="w-full py-4 rounded-xl bg-badge-blue-text text-white text-[13px] font-bold uppercase tracking-wider flex items-center justify-center gap-2 hover:opacity-90 transition-opacity">
-              Confirm Goods Received <ChevronRight size={16} strokeWidth={2.5} />
-            </Link>
+            <button
+              onClick={() => handleStatusAdvance("RECEIVED")}
+              disabled={isPending}
+              className="w-full py-4 rounded-xl bg-badge-green-text text-white text-[13px] font-bold uppercase tracking-wider flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50"
+            >
+              {isPending ? "…" : <>{t("cta.confirm_received", language)} <ChevronRight size={16} strokeWidth={2.5} /></>}
+            </button>
           );
         }
         if (!btn) return null;
@@ -826,7 +960,7 @@ export function RunDetailClient({
                   Step {startStep} of 2
                 </p>
                 <h2 className="text-[15px] font-bold text-foreground">
-                  {startStep === 1 ? "Select Colours" : "Manufacturing Details"}
+                  {startStep === 1 ? t("modal.start.select_colours", language) : t("modal.start.manufacturing", language)}
                 </h2>
               </div>
               <button
@@ -923,7 +1057,7 @@ export function RunDetailClient({
                     {/* ── Yarn Stock (dropdown from delivery) ── */}
                     <div>
                       <label className="block text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-1">
-                        Yarn Stock
+                        {t("modal.start.yarn_stock", language)}
                       </label>
                       {yarnLots.length > 0 ? (
                         <>
@@ -932,7 +1066,7 @@ export function RunDetailClient({
                             onChange={(e) => setSelectedYarnLineId(e.target.value ? Number(e.target.value) : null)}
                             className="w-full px-3 py-2.5 rounded-lg bg-secondary border border-border text-[12px] text-foreground focus:outline-none focus:ring-1 focus:ring-foreground/30"
                           >
-                            <option value="">Select yarn lot…</option>
+                            <option value="">{t("modal.start.select_yarn", language)}</option>
                             {yarnLots.map((lot) => (
                               <option key={lot.id} value={lot.id}>
                                 {lot.colourName ?? lot.colourCode} ({lot.colourCode}) · Lot {lot.lotNumber} · {lot.remainingKg.toFixed(1)}kg remaining
@@ -954,19 +1088,19 @@ export function RunDetailClient({
                         </>
                       ) : (
                         <div className="px-3 py-2.5 rounded-lg bg-secondary/50 border border-border text-[11px] text-muted-foreground">
-                          No yarn deliveries recorded for your account. Contact admin to add stock.
+                          {t("modal.start.no_yarn", language)}
                         </div>
                       )}
                     </div>
 
                     {/* ── Other manufacturing fields ── */}
                     {[
-                      { key: "machineGauge" as const, label: "Machine Gauge", placeholder: "e.g. 7GG", type: "text" },
-                      { key: "knitwearPly" as const, label: "Knitwear Ply", placeholder: "e.g. 2-ply", type: "text" },
-                      { key: "stitchType" as const, label: "Stitch Type", placeholder: "e.g. Jersey, Rib, Intarsia", type: "text" },
-                      { key: "washingProgram" as const, label: "Washing Program", placeholder: "e.g. Superwash", type: "text" },
-                      { key: "washingTemperature" as const, label: "Temperature (°C)", placeholder: "e.g. 30", type: "number" },
-                      { key: "expectedExFactory" as const, label: "Expected Ex-Factory", placeholder: "", type: "date" },
+                      { key: "machineGauge" as const, label: t("modal.start.gauge", language), placeholder: "e.g. 7GG", type: "text" },
+                      { key: "knitwearPly" as const, label: t("modal.start.ply", language), placeholder: "e.g. 2-ply", type: "text" },
+                      { key: "stitchType" as const, label: t("modal.start.stitch", language), placeholder: "e.g. Jersey, Rib, Intarsia", type: "text" },
+                      { key: "washingProgram" as const, label: t("modal.start.washing", language), placeholder: "e.g. Superwash", type: "text" },
+                      { key: "washingTemperature" as const, label: t("modal.start.temp", language), placeholder: "e.g. 30", type: "number" },
+                      { key: "expectedExFactory" as const, label: t("modal.start.ex_factory", language), placeholder: "", type: "date" },
                     ].map(({ key, label, placeholder, type }) => (
                       <div key={key}>
                         <label className="block text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-1">

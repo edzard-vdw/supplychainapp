@@ -1,41 +1,15 @@
-import { prisma } from "@/lib/db";
-import { getSession, getSupplierFilter } from "@/lib/session";
-import { getMaterials } from "@/lib/actions/materials";
-import { OrdersClient } from "./orders-client";
+import { redirect } from "next/navigation";
 
-export default async function OrdersPage({ searchParams }: { searchParams: Promise<{ upload?: string }> }) {
-  const session = await getSession();
-  const supplierFilter = getSupplierFilter(session);
-  const params = await searchParams;
-
-  const [orders, materials, suppliers] = await Promise.all([
-    prisma.order.findMany({
-      where: {
-        ...supplierFilter,
-        // Suppliers should not see DRAFT orders (internal admin drafts)
-        ...(session.role !== "ADMIN" && { status: { not: "DRAFT" } }),
-      },
-      orderBy: [{ priority: "desc" }, { createdAt: "desc" }],
-      include: {
-        supplier: { select: { id: true, name: true } },
-        _count: { select: { orderLines: true } },
-      },
-    }),
-    getMaterials(),
-    prisma.supplier.findMany({
-      where: { isActive: true },
-      orderBy: { name: "asc" },
-      select: { id: true, name: true, type: true },
-    }),
-  ]);
-
-  return (
-    <OrdersClient
-      initialOrders={JSON.parse(JSON.stringify(orders))}
-      materials={JSON.parse(JSON.stringify(materials))}
-      suppliers={suppliers}
-      isAdmin={session.role === "ADMIN"}
-      showUploadOnLoad={params.upload === "true"}
-    />
-  );
+// The orders list is now unified under /overview?view=orders
+// Individual order detail pages (/orders/[orderId]) remain as-is
+export default async function OrdersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ upload?: string }>;
+}) {
+  const { upload } = await searchParams;
+  if (upload === "true") {
+    redirect("/overview?view=orders&upload=true");
+  }
+  redirect("/overview?view=orders");
 }

@@ -29,6 +29,7 @@ export default async function DashboardPage() {
         supplierName: session.supplierName,
       }}
       stats={{ orderCount, runCount, garmentCount, materialCount, taggedCount, activeRunCount, pendingRunCount, pendingOrders }}
+      language={session.language ?? "en"}
     />
   );
 }

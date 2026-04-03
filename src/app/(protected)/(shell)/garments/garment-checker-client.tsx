@@ -7,6 +7,7 @@ import { Search, CheckCircle, XCircle, Nfc, QrCode, Camera, Keyboard, AlertTrian
 import { Badge } from "@/components/ui/badge";
 import { RUN_STATUS_DISPLAY, formatDate } from "@/types/supply-chain";
 import { lookupGarment, registerGarmentToRun } from "@/lib/actions/garments";
+import { t } from "@/lib/i18n";
 
 type RecentGarment = {
   id: number;
@@ -61,10 +62,12 @@ export function GarmentCheckerClient({
   recentGarments,
   productionRuns,
   isAdmin,
+  language = "en",
 }: {
   recentGarments: RecentGarment[];
   productionRuns: RunOption[];
   isAdmin: boolean;
+  language?: string;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -167,18 +170,18 @@ export function GarmentCheckerClient({
     <div className="px-6 py-8 max-w-[900px] mx-auto">
       {/* Header */}
       <div className="mb-6">
-        <p className="text-[10px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1">Garments</p>
-        <h1 className="text-[20px] font-bold uppercase tracking-wide text-foreground">Garment Checker</h1>
-        <p className="text-[11px] text-muted-foreground mt-1">Scan or enter a code to verify a garment and trace its origin</p>
+        <p className="text-[10px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1">{t("nav.garments", language)}</p>
+        <h1 className="text-[20px] font-bold uppercase tracking-wide text-foreground">{t("garment.checker.title", language)}</h1>
+        <p className="text-[11px] text-muted-foreground mt-1">{t("garment.checker.subtitle", language)}</p>
       </div>
 
       {/* Scan mode toggle */}
       <div className="flex items-center bg-card border border-border rounded-xl p-1 mb-6">
         <button onClick={() => { setScanMode("manual"); setScanning(false); }} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${scanMode === "manual" ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"}`}>
-          <Keyboard size={14} /> Type Code
+          <Keyboard size={14} /> {t("garment.checker.type_code", language)}
         </button>
         <button onClick={() => { setScanMode("qr"); setResult(null); }} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${scanMode === "qr" ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"}`}>
-          <QrCode size={14} /> QR Scan
+          <QrCode size={14} /> {t("garment.checker.qr_scan", language)}
         </button>
         <button onClick={() => { setScanMode("nfc"); setResult(null); }} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${scanMode === "nfc" ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"}`}>
           <Nfc size={14} /> NFC
@@ -196,7 +199,7 @@ export function GarmentCheckerClient({
                 value={searchCode}
                 onChange={(e) => setSearchCode(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") handleLookup(); }}
-                placeholder="Enter garment code, NFC tag, or QR value..."
+                placeholder={t("garment.checker.placeholder", language)}
                 className="w-full pl-12 pr-24 py-4 bg-background border border-border rounded-xl text-[14px] font-mono-brand text-foreground placeholder-muted-foreground outline-none focus:ring-2 focus:ring-ring"
                 autoFocus
               />
@@ -205,7 +208,7 @@ export function GarmentCheckerClient({
                 disabled={isPending || !searchCode.trim()}
                 className="absolute right-2 top-1/2 -translate-y-1/2 px-4 py-2 rounded-lg bg-foreground text-background text-[11px] font-bold uppercase tracking-wider disabled:opacity-40"
               >
-                {isPending ? "..." : "Check"}
+                {isPending ? "..." : t("garment.checker.check", language)}
               </button>
             </div>
           </div>
@@ -224,12 +227,12 @@ export function GarmentCheckerClient({
                     <div className="absolute -bottom-0.5 -right-0.5 w-5 h-5 border-b-2 border-r-2 border-white rounded-br-lg" />
                   </div>
                 </div>
-                <p className="absolute bottom-3 left-0 right-0 text-center text-white/50 text-[10px]">Point at QR code</p>
+                <p className="absolute bottom-3 left-0 right-0 text-center text-white/50 text-[10px]">{t("garment.checker.point_qr", language)}</p>
               </>
             ) : (
               <button onClick={startQrScan} className="flex flex-col items-center gap-3 text-white/50 hover:text-white transition-colors py-12">
                 <Camera size={36} />
-                <span className="text-[11px] font-semibold uppercase tracking-wider">Tap to scan QR</span>
+                <span className="text-[11px] font-semibold uppercase tracking-wider">{t("garment.checker.tap_qr", language)}</span>
               </button>
             )}
           </div>
@@ -240,18 +243,18 @@ export function GarmentCheckerClient({
             {!nfcSupported && (
               <div className="flex items-center gap-2 text-badge-orange-text bg-badge-orange-bg px-4 py-2 rounded-lg mb-4">
                 <AlertTriangle size={14} />
-                <span className="text-[10px] font-medium">NFC requires Chrome on Android</span>
+                <span className="text-[10px] font-medium">{t("garment.checker.nfc_required", language)}</span>
               </div>
             )}
             {scanning ? (
               <>
                 <div className="w-20 h-20 rounded-full border-4 border-foreground/20 border-t-foreground animate-spin mb-4" />
-                <p className="text-[13px] font-semibold text-foreground">Waiting for NFC tag...</p>
+                <p className="text-[13px] font-semibold text-foreground">{t("garment.checker.waiting_nfc", language)}</p>
               </>
             ) : (
               <button onClick={startNfcScan} disabled={!nfcSupported} className="flex flex-col items-center gap-3 text-muted-foreground hover:text-foreground disabled:opacity-30">
                 <Nfc size={36} />
-                <span className="text-[11px] font-semibold uppercase tracking-wider">Tap to scan NFC</span>
+                <span className="text-[11px] font-semibold uppercase tracking-wider">{t("garment.checker.tap_nfc", language)}</span>
               </button>
             )}
           </div>
@@ -270,13 +273,13 @@ export function GarmentCheckerClient({
             )}
             <div className="flex-1 min-w-0">
               <p className="text-[13px] font-bold text-foreground">
-                {result.found ? "Garment Found" : "Not Registered"}
+                {result.found ? t("garment.checker.found", language) : t("garment.checker.not_registered", language)}
               </p>
               <p className="text-[11px] font-mono-brand text-muted-foreground">{result.searchCode}</p>
             </div>
             {result.found && (
               <Link href={`/garments/${result.garment!.id}`} className="flex items-center gap-1 text-[10px] font-semibold text-primary hover:underline">
-                Full details <ArrowRight size={12} />
+                {t("garment.checker.full_details", language)} <ArrowRight size={12} />
               </Link>
             )}
           </div>
@@ -287,19 +290,19 @@ export function GarmentCheckerClient({
               {/* Garment info */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div>
-                  <p className="text-[9px] font-mono-brand uppercase tracking-widest text-muted-foreground">Code</p>
+                  <p className="text-[9px] font-mono-brand uppercase tracking-widest text-muted-foreground">{t("garment.checker.field_code", language)}</p>
                   <p className="text-[12px] font-mono-brand font-semibold text-foreground">{result.garment.garmentCode}</p>
                 </div>
                 <div>
-                  <p className="text-[9px] font-mono-brand uppercase tracking-widest text-muted-foreground">Product</p>
+                  <p className="text-[9px] font-mono-brand uppercase tracking-widest text-muted-foreground">{t("garment.checker.field_product", language)}</p>
                   <p className="text-[12px] text-foreground">{result.garment.product || "—"}</p>
                 </div>
                 <div>
-                  <p className="text-[9px] font-mono-brand uppercase tracking-widest text-muted-foreground">Size</p>
+                  <p className="text-[9px] font-mono-brand uppercase tracking-widest text-muted-foreground">{t("garment.checker.field_size", language)}</p>
                   <p className="text-[12px] text-foreground">{result.garment.size || "—"}</p>
                 </div>
                 <div>
-                  <p className="text-[9px] font-mono-brand uppercase tracking-widest text-muted-foreground">Tagged</p>
+                  <p className="text-[9px] font-mono-brand uppercase tracking-widest text-muted-foreground">{t("garment.checker.field_tagged", language)}</p>
                   <p className="text-[12px] text-foreground">{result.garment.taggedAt ? formatDate(result.garment.taggedAt) : "—"}</p>
                 </div>
               </div>
@@ -307,7 +310,7 @@ export function GarmentCheckerClient({
               {/* Production trace */}
               {result.garment.productionRun && (
                 <div className="bg-card rounded-xl p-4 border border-border">
-                  <p className="text-[9px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-2">Production Trace</p>
+                  <p className="text-[9px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-2">{t("garment.checker.trace", language)}</p>
                   <div className="flex items-center gap-2 text-[11px] flex-wrap">
                     {result.garment.productionRun.orderLine?.order && (
                       <>
@@ -321,7 +324,7 @@ export function GarmentCheckerClient({
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3">
                     <div>
-                      <p className="text-[9px] font-mono-brand uppercase tracking-widest text-muted-foreground">Run Status</p>
+                      <p className="text-[9px] font-mono-brand uppercase tracking-widest text-muted-foreground">{t("garment.checker.run_status", language)}</p>
                       <Badge
                         label={RUN_STATUS_DISPLAY[result.garment.productionRun.status]?.label || result.garment.productionRun.status}
                         bgClass={RUN_STATUS_DISPLAY[result.garment.productionRun.status]?.bgClass || "bg-badge-gray-bg"}
@@ -330,7 +333,7 @@ export function GarmentCheckerClient({
                     </div>
                     {result.garment.productionRun.supplier && (
                       <div>
-                        <p className="text-[9px] font-mono-brand uppercase tracking-widest text-muted-foreground">Supplier</p>
+                        <p className="text-[9px] font-mono-brand uppercase tracking-widest text-muted-foreground">{t("garment.checker.supplier", language)}</p>
                         <p className="text-[11px] text-foreground">
                           {result.garment.productionRun.supplier.name}
                           {result.garment.productionRun.supplier.country && ` · ${result.garment.productionRun.supplier.country}`}
@@ -339,7 +342,7 @@ export function GarmentCheckerClient({
                     )}
                     {result.garment.productionRun.orderLine && (
                       <div>
-                        <p className="text-[9px] font-mono-brand uppercase tracking-widest text-muted-foreground">Client</p>
+                        <p className="text-[9px] font-mono-brand uppercase tracking-widest text-muted-foreground">{t("garment.checker.client", language)}</p>
                         <p className="text-[11px] text-foreground">{result.garment.productionRun.orderLine.order.client || "—"}</p>
                       </div>
                     )}
@@ -350,7 +353,7 @@ export function GarmentCheckerClient({
               {/* Recent scans */}
               {result.garment.scanEvents.length > 0 && (
                 <div>
-                  <p className="text-[9px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1">Recent Scans</p>
+                  <p className="text-[9px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1">{t("garment.checker.recent_scans", language)}</p>
                   <div className="flex items-center gap-2 flex-wrap">
                     {result.garment.scanEvents.map((e) => (
                       <Badge key={e.id} label={`${e.scanType.replace("_", " ")} · ${formatDate(e.createdAt)}`} />
@@ -365,25 +368,25 @@ export function GarmentCheckerClient({
           {!result.found && (
             <div className="px-5 pb-5">
               <p className="text-[11px] text-muted-foreground mb-4">
-                This code isn&apos;t linked to any garment. Would you like to register it to a production run?
+                {t("garment.checker.unregistered", language)}
               </p>
               {!showRegister ? (
                 <button
                   onClick={() => setShowRegister(true)}
                   className="px-4 py-2 rounded-lg bg-foreground text-background text-[11px] font-bold uppercase tracking-wider"
                 >
-                  Register to Production Run
+                  {t("garment.checker.register_btn", language)}
                 </button>
               ) : (
                 <div className="bg-card rounded-xl p-4 border border-border space-y-3">
                   <div>
-                    <label className="block text-[10px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1">Select Production Run</label>
+                    <label className="block text-[10px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1">{t("garment.checker.select_run", language)}</label>
                     <select
                       value={registerRunId ?? ""}
                       onChange={(e) => setRegisterRunId(e.target.value ? parseInt(e.target.value) : null)}
                       className="w-full px-3 py-2 bg-background border border-border rounded-lg text-[12px] text-foreground outline-none focus:ring-1 focus:ring-ring"
                     >
-                      <option value="">Choose a run...</option>
+                      <option value="">{t("garment.checker.choose_run", language)}</option>
                       {productionRuns.map((r) => (
                         <option key={r.id} value={r.id}>
                           {r.runCode} — {r.productName || "Unknown"} ({r.unitsProduced}/{r.quantity}) [{RUN_STATUS_DISPLAY[r.status]?.label || r.status}]
@@ -400,10 +403,10 @@ export function GarmentCheckerClient({
                       disabled={isPending || !registerRunId}
                       className="px-4 py-2 rounded-lg bg-foreground text-background text-[11px] font-bold uppercase tracking-wider disabled:opacity-40"
                     >
-                      {isPending ? "Registering..." : "Register"}
+                      {isPending ? t("garment.checker.registering", language) : t("garment.checker.register", language)}
                     </button>
                     <button onClick={() => setShowRegister(false)} className="px-4 py-2 text-[11px] text-muted-foreground hover:text-foreground">
-                      Cancel
+                      {t("cta.cancel", language)}
                     </button>
                   </div>
                 </div>
@@ -417,7 +420,7 @@ export function GarmentCheckerClient({
       <div className="bg-card border border-border rounded-xl overflow-hidden">
         <div className="px-5 py-3 border-b border-border flex items-center justify-between">
           <h3 className="text-[11px] font-bold uppercase tracking-wider text-foreground flex items-center gap-1.5">
-            <Clock size={12} /> Recent Garments
+            <Clock size={12} /> {t("garment.checker.recent", language)}
           </h3>
           <span className="text-[10px] font-mono-brand text-muted-foreground">{recentGarments.length}</span>
         </div>
@@ -437,9 +440,9 @@ export function GarmentCheckerClient({
                   <span className="text-[9px] text-muted-foreground truncate max-w-[120px]">{g.productionRun.runCode}</span>
                 )}
                 {g.isTagged ? (
-                  <Badge label="Tagged" bgClass="bg-badge-green-bg" textClass="text-badge-green-text" />
+                  <Badge label={t("garment.checker.tagged", language)} bgClass="bg-badge-green-bg" textClass="text-badge-green-text" />
                 ) : (
-                  <Badge label="Untagged" bgClass="bg-badge-orange-bg" textClass="text-badge-orange-text" />
+                  <Badge label={t("garment.checker.untagged", language)} bgClass="bg-badge-orange-bg" textClass="text-badge-orange-text" />
                 )}
               </button>
             ))}
@@ -447,7 +450,7 @@ export function GarmentCheckerClient({
         ) : (
           <div className="text-center py-10">
             <Package size={20} className="mx-auto text-muted-foreground mb-2" />
-            <p className="text-[11px] text-muted-foreground">No garments yet</p>
+            <p className="text-[11px] text-muted-foreground">{t("garment.checker.no_garments", language)}</p>
           </div>
         )}
       </div>

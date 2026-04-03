@@ -56,6 +56,7 @@ export default async function GarmentsPage() {
       recentGarments={JSON.parse(JSON.stringify(recentGarments))}
       productionRuns={runs}
       isAdmin={session.role === "ADMIN"}
+      language={session.language ?? "en"}
     />
   );
 }

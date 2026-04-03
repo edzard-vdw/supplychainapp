@@ -49,6 +49,7 @@ export async function POST(request: NextRequest) {
     session.role = user.role;
     session.supplierId = user.supplier?.id ?? null;
     session.supplierName = user.supplier?.name ?? null;
+    session.language = user.language ?? "en";
     session.isLoggedIn = true;
     await session.save();
 

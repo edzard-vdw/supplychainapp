@@ -18,6 +18,7 @@ export default async function ShellLayout({
         supplierId: session.supplierId,
         supplierName: session.supplierName,
       }}
+      language={session.language ?? "en"}
     >
       {children}
     </Shell>

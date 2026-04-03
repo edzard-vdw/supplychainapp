@@ -22,6 +22,7 @@ model User {
   password   String
   role       Role      @default(SUPPLIER)
   supplierId Int?      @map("supplier_id")
+  language   String    @default("en") @map("language") // "en" | "ro" | "bg" | "pt"
   isActive   Boolean   @default(true) @map("is_active")
   createdAt  DateTime  @default(now()) @map("created_at")
   updatedAt  DateTime  @updatedAt @map("updated_at")
@@ -56,6 +57,7 @@ model Supplier {
   notes       String?      @db.Text
   isActive    Boolean      @default(true) @map("is_active")
   externalId  Int?         @unique @map("external_id")
+  language    String       @default("en") @map("language")
 
   users            User[]
   orders           Order[]
@@ -403,6 +405,10 @@ model ProductionRun {
   expectedExFactory  DateTime? @map("expected_ex_factory")    // replaces expectedCompletion
   actualCompletion   DateTime? @map("actual_completion")
   notes              String?   @db.Text
+
+  // Post-QC yarn usage (entered when run is COMPLETED)
+  yarnUsedKg         Float?    @map("yarn_used_kg")          // Actual kg of yarn consumed
+  yarnStockDeducted  Boolean   @default(false) @map("yarn_stock_deducted") // Whether stock was reconciled
 
   externalId Int?      @unique @map("external_id")
   lastSyncAt DateTime? @map("last_sync_at")

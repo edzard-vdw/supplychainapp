@@ -37,7 +37,7 @@ export async function createMaterial(data: z.infer<typeof MaterialSchema>) {
   try {
     const parsed = MaterialSchema.parse(data);
     const material = await prisma.materialColor.create({ data: parsed });
-    revalidatePath("/materials");
+    revalidatePath("/stock");
     return { success: true, data: material };
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Failed to create material";
@@ -51,7 +51,7 @@ export async function updateMaterial(id: number, data: Partial<z.infer<typeof Ma
       where: { id },
       data,
     });
-    revalidatePath("/materials");
+    revalidatePath("/stock");
     return { success: true, data: material };
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Failed to update material";
@@ -65,7 +65,7 @@ export async function deleteMaterial(id: number) {
       where: { id },
       data: { isActive: false },
     });
-    revalidatePath("/materials");
+    revalidatePath("/stock");
     return { success: true };
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Failed to delete material";

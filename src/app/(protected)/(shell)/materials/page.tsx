@@ -79,6 +79,7 @@ export default async function MaterialsPage() {
       yarnStock={JSON.parse(JSON.stringify(yarnStock))}
       deliveries={JSON.parse(JSON.stringify(deliveries))}
       supplierId={session.supplierId || null}
+      language={session.language ?? "en"}
     />
   );
 }

@@ -437,6 +437,78 @@ export async function startProduction(
   }
 }
 
+/**
+ * Record actual yarn usage after QC/completion.
+ * For bulk-mode runs (no per-garment scanning), deducts from the delivery line.
+ * For individual-tagging runs, the per-scan deductions already happened — this
+ * records the actual figure and reconciles any difference.
+ */
+export async function saveYarnUsage(runId: number, yarnUsedKg: number) {
+  try {
+    const run = await prisma.productionRun.findUnique({
+      where: { id: runId },
+      select: {
+        id: true,
+        individualTagging: true,
+        yarnColourCode: true,
+        yarnLotNumber: true,
+        quantity: true,
+        yarnUsedKg: true,
+        yarnStockDeducted: true,
+      },
+    });
+    if (!run) return { success: false, error: "Run not found" };
+
+    let deductionApplied = run.yarnStockDeducted;
+
+    // Only touch the delivery line if we have a yarn lot reference
+    if (run.yarnColourCode && run.yarnLotNumber) {
+      const yarnLine = await prisma.yarnDeliveryLine.findFirst({
+        where: { colourCode: run.yarnColourCode, lotNumber: run.yarnLotNumber },
+      });
+
+      if (yarnLine) {
+        if (!run.individualTagging && !run.yarnStockDeducted) {
+          // Bulk mode: no per-scan deductions happened — deduct full usage now
+          const safeDeduct = Math.min(yarnUsedKg, yarnLine.remainingKg);
+          await prisma.yarnDeliveryLine.update({
+            where: { id: yarnLine.id },
+            data: { remainingKg: { decrement: safeDeduct } },
+          });
+          deductionApplied = true;
+        } else if (run.individualTagging && run.yarnUsedKg != null) {
+          // Individual tagging: reconcile actual vs previous actual (if updating)
+          const diff = yarnUsedKg - run.yarnUsedKg;
+          if (diff !== 0) {
+            const newRemaining = Math.max(0, yarnLine.remainingKg - diff);
+            await prisma.yarnDeliveryLine.update({
+              where: { id: yarnLine.id },
+              data: { remainingKg: newRemaining },
+            });
+          }
+          deductionApplied = true;
+        } else if (run.individualTagging && !run.yarnStockDeducted) {
+          // First time entering actual for individual tagging run —
+          // per-scan already applied estimates; record actuals only (no extra deduction)
+          deductionApplied = true;
+        }
+      }
+    }
+
+    await prisma.productionRun.update({
+      where: { id: runId },
+      data: { yarnUsedKg, yarnStockDeducted: deductionApplied },
+    });
+
+    revalidatePath("/production-runs");
+    revalidatePath("/stock");
+    return { success: true };
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to save yarn usage";
+    return { success: false, error: message };
+  }
+}
+
 export async function updateYarnCompositions(runId: number, yarns: { yarnType: string; percentage: number }[]) {
   try {
     await prisma.$transaction([

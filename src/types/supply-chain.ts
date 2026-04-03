@@ -5,9 +5,9 @@ export const ORDER_STATUS_DISPLAY: Record<string, { label: string; bgClass: stri
   CONFIRMED: { label: "Submitted", bgClass: "bg-badge-blue-bg", textClass: "text-badge-blue-text" },
   ACKNOWLEDGED: { label: "Accepted", bgClass: "bg-badge-emerald-bg", textClass: "text-badge-emerald-text" },
   IN_PRODUCTION: { label: "In Production", bgClass: "bg-badge-orange-bg", textClass: "text-badge-orange-text" },
-  QC: { label: "Quality Check", bgClass: "bg-badge-purple-bg", textClass: "text-badge-purple-text" },
-  SHIPPED: { label: "Shipped", bgClass: "bg-badge-sky-bg", textClass: "text-badge-sky-text" },
-  DELIVERED: { label: "Delivered", bgClass: "bg-badge-green-bg", textClass: "text-badge-green-text" },
+  QC: { label: "QC / Scan", bgClass: "bg-badge-purple-bg", textClass: "text-badge-purple-text" },
+  SHIPPED: { label: "Shipping", bgClass: "bg-badge-sky-bg", textClass: "text-badge-sky-text" },
+  DELIVERED: { label: "Received", bgClass: "bg-badge-green-bg", textClass: "text-badge-green-text" },
   CANCELLED: { label: "Cancelled", bgClass: "bg-badge-red-bg", textClass: "text-badge-red-text" },
 };
 
@@ -52,19 +52,19 @@ export const RUN_STATUS_DISPLAY: Record<string, { label: string; bgClass: string
   QC: { label: "QC / Scan", bgClass: "bg-badge-purple-bg", textClass: "text-badge-purple-text" },
   SHIPPED: { label: "Shipping", bgClass: "bg-badge-sky-bg", textClass: "text-badge-sky-text" },
   RECEIVED: { label: "Received", bgClass: "bg-badge-green-bg", textClass: "text-badge-green-text" },
-  COMPLETED: { label: "Completed", bgClass: "bg-badge-green-bg", textClass: "text-badge-green-text" },
+  // COMPLETED kept for display-only backward compat — treated as RECEIVED in UI
+  COMPLETED: { label: "Received", bgClass: "bg-badge-green-bg", textClass: "text-badge-green-text" },
 };
 
 // ─── Run status flow ─────────────────────────────────────
 
-// Full pipeline (admin sees all)
+// Full pipeline (admin sees all) — RECEIVED is the terminal state
 export const RUN_STATUS_ORDER = [
   "PLANNED",
   "IN_PRODUCTION",
   "QC",
   "SHIPPED",
   "RECEIVED",
-  "COMPLETED",
 ] as const;
 
 // Supplier pipeline — stages they control
@@ -81,7 +81,9 @@ export function getRunStatusOrder(role: string) {
 
 // Who can transition to which status
 export function getAllowedTransitions(currentStatus: string, role: string): string[] {
-  const currentIdx = RUN_STATUS_ORDER.indexOf(currentStatus as typeof RUN_STATUS_ORDER[number]);
+  // Treat legacy COMPLETED as RECEIVED
+  const normalised = currentStatus === "COMPLETED" ? "RECEIVED" : currentStatus;
+  const currentIdx = RUN_STATUS_ORDER.indexOf(normalised as typeof RUN_STATUS_ORDER[number]);
   if (currentIdx === -1) return [];
   if (role === "ADMIN") return [...RUN_STATUS_ORDER];
   const supplierMax = RUN_STATUS_ORDER.indexOf("SHIPPED");
@@ -90,7 +92,7 @@ export function getAllowedTransitions(currentStatus: string, role: string): stri
   return allowed;
 }
 
-// Whether a status is a "supplier" status or "admin" status
+// Whether a status is admin-only (supplier cannot set it)
 export function isAdminOnlyStatus(status: string): boolean {
   return status === "RECEIVED" || status === "COMPLETED";
 }

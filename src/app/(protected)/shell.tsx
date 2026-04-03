@@ -7,13 +7,15 @@ import { Menu, X, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getSectionsForRole } from "@/lib/sections";
 import { ToastProvider } from "@/components/ui/toast";
+import { t } from "@/lib/i18n";
 
 interface ShellProps {
   user: { id: number; email: string; name: string; role: string; supplierId?: number | null; supplierName?: string | null };
+  language: string;
   children: React.ReactNode;
 }
 
-export function Shell({ user, children }: ShellProps) {
+export function Shell({ user, language, children }: ShellProps) {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -23,14 +25,26 @@ export function Shell({ user, children }: ShellProps) {
 
   // Determine active section from pathname
   const isSettingsRoute = pathname.startsWith("/settings");
+
+  // Route aliases: map extra paths to a hub id
+  const ROUTE_ALIASES: Record<string, string> = {
+    "/orders": "overview",
+    "/production-runs": "overview",
+    "/stock": "stock",
+  };
+  const aliasedId = Object.entries(ROUTE_ALIASES).find(([prefix]) => pathname.startsWith(prefix))?.[1];
+
   const activeSection = isSettingsRoute
     ? null
-    : (sections.find((s) => pathname.startsWith(s.routePrefix)) ?? sections[0]);
+    : (sections.find((s) => (aliasedId ? s.id === aliasedId : pathname.startsWith(s.routePrefix)))
+        ?? sections.find((s) => pathname.startsWith(s.routePrefix))
+        ?? sections.find((s) => s.id === "overview")
+        ?? sections[0]);
 
   // Active tab within section
   const activeTabSlug = activeSection && activeSection.tabs.length > 1
-    ? activeSection.tabs.find((t) => pathname.includes(t.slug))?.slug ?? activeSection.tabs[0].slug
-    : activeSection?.tabs[0].slug ?? "";
+    ? activeSection.tabs.find((t) => pathname.includes(t.slug))?.slug ?? activeSection.tabs[0]?.slug ?? ""
+    : activeSection?.tabs[0]?.slug ?? "";
 
   // User initials for avatar button
   const initials = user.name
@@ -66,7 +80,7 @@ export function Shell({ user, children }: ShellProps) {
               <Link
                 key={section.id}
                 href={section.routePrefix}
-                title={section.label}
+                title={t(section.labelKey, language)}
                 className={cn(
                   "relative w-9 h-9 flex items-center justify-center rounded-lg transition-all",
                   isActive
@@ -100,7 +114,7 @@ export function Shell({ user, children }: ShellProps) {
                 ? "bg-secondary text-foreground"
                 : "text-muted-foreground hover:bg-secondary hover:text-foreground"
             )}
-            title="Settings"
+            title={t("hub.settings", language)}
           >
             <Settings size={15} />
           </Link>
@@ -130,7 +144,7 @@ export function Shell({ user, children }: ShellProps) {
               className="text-[11px] font-bold uppercase tracking-[0.15em]"
               style={{ color: isSettingsRoute ? undefined : activeSection?.color }}
             >
-              {isSettingsRoute ? "Settings." : activeSection?.label}
+              {isSettingsRoute ? t("hub.settings", language) + "." : activeSection ? t(activeSection.labelKey, language).toUpperCase() + "." : ""}
             </span>
           </div>
           <Link href="/dashboard" className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground" title="Home">
@@ -151,7 +165,7 @@ export function Shell({ user, children }: ShellProps) {
               className="text-[13px] font-bold uppercase tracking-[0.15em]"
               style={{ color: isSettingsRoute ? undefined : activeSection?.color }}
             >
-              {isSettingsRoute ? "Settings." : activeSection?.label}
+              {isSettingsRoute ? t("hub.settings", language) + "." : activeSection ? t(activeSection.labelKey, language).toUpperCase() + "." : ""}
             </span>
           </div>
 
@@ -173,7 +187,7 @@ export function Shell({ user, children }: ShellProps) {
                     )}
                     style={isActive ? { borderColor: activeSection.color } : undefined}
                   >
-                    {tab.name}
+                    {t(tab.nameKey, language)}
                   </Link>
                 );
               })}
@@ -189,7 +203,7 @@ export function Shell({ user, children }: ShellProps) {
               onClick={handleSignOut}
               className="text-[10px] text-muted-foreground hover:text-foreground uppercase tracking-wider transition-colors"
             >
-              Sign out
+              {t("hub.signout", language)}
             </button>
           </div>
         </div>
@@ -212,7 +226,7 @@ export function Shell({ user, children }: ShellProps) {
                   )}
                   style={isActive ? { borderColor: activeSection.color } : undefined}
                 >
-                  {tab.name}
+                  {t(tab.nameKey, language)}
                 </Link>
               );
             })}
@@ -264,7 +278,7 @@ export function Shell({ user, children }: ShellProps) {
                     style={isActive ? { color: section.color } : undefined}
                   >
                     <Icon size={16} />
-                    {section.label}
+                    {t(section.labelKey, language)}
                   </Link>
                 );
               })}
@@ -280,7 +294,7 @@ export function Shell({ user, children }: ShellProps) {
                 className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-[12px] font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-all"
               >
                 <Settings size={16} />
-                Settings
+                {t("hub.settings", language)}
               </Link>
             </div>
 
@@ -293,7 +307,7 @@ export function Shell({ user, children }: ShellProps) {
                 onClick={handleSignOut}
                 className="text-[10px] text-muted-foreground hover:text-foreground uppercase tracking-wider"
               >
-                Sign out
+                {t("hub.signout", language)}
               </button>
             </div>
           </div>

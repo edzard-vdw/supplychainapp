@@ -6,6 +6,7 @@ import { Upload, Package, CheckCircle, AlertTriangle, ChevronDown, ChevronUp, Pe
 import { ContextualHelp } from "@/components/ui/contextual-help";
 import { Badge } from "@/components/ui/badge";
 import { importDeliveryNote, confirmDelivery, updateYarnDeliveryLine, type ParsedDeliveryNote } from "@/lib/actions/yarn-deliveries";
+import { t, getHelpContent } from "@/lib/i18n";
 
 type LotDetail = {
   lineId: number;
@@ -48,10 +49,12 @@ export function MaterialsPageClient({
   yarnStock,
   deliveries: initialDeliveries,
   supplierId,
+  language = "en",
 }: {
   yarnStock: ColourStock[];
   deliveries: Delivery[];
   supplierId: number | null;
+  language?: string;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -113,10 +116,10 @@ export function MaterialsPageClient({
       <div className="flex items-start justify-between mb-6">
         <div>
           <p className="text-[10px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1">Materials</p>
-          <h1 className="text-[20px] font-bold uppercase tracking-wide text-foreground">Yarn Stock</h1>
+          <h1 className="text-[20px] font-bold uppercase tracking-wide text-foreground">{t("materials.title", language)}</h1>
         </div>
         <button onClick={() => setShowUpload(!showUpload)} className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-[11px] font-semibold uppercase tracking-wider bg-foreground text-background hover:bg-foreground/90 transition-colors">
-          <Upload size={14} /> Upload Delivery Note
+          <Upload size={14} /> {t("materials.upload", language)}
         </button>
       </div>
 
@@ -276,9 +279,9 @@ export function MaterialsPageClient({
         !showUpload && (
           <div className="text-center py-16 border border-dashed border-border rounded-xl mb-8">
             <Package size={24} className="mx-auto text-muted-foreground mb-3" />
-            <p className="text-[13px] font-semibold text-foreground mb-1">No yarn stock</p>
-            <p className="text-[11px] text-muted-foreground mb-4">Upload a Suedwolle delivery note to start tracking your yarn</p>
-            <button onClick={() => setShowUpload(true)} className="px-4 py-2 rounded-lg bg-foreground text-background text-[11px] font-bold uppercase tracking-wider">Upload Delivery Note</button>
+            <p className="text-[13px] font-semibold text-foreground mb-1">{t("materials.no_stock", language)}</p>
+            <p className="text-[11px] text-muted-foreground mb-4">{t("jobs.accept_prompt", language)}</p>
+            <button onClick={() => setShowUpload(true)} className="px-4 py-2 rounded-lg bg-foreground text-background text-[11px] font-bold uppercase tracking-wider">{t("materials.upload", language)}</button>
           </div>
         )
       )}
@@ -332,17 +335,17 @@ export function MaterialsPageClient({
           </div>
         </div>
       )}
-      <ContextualHelp
-        pageId="materials"
-        title="Yarn & Materials"
-        steps={[
-          { icon: "📄", text: "When yarn arrives, upload the delivery note PDF" },
-          { icon: "✅", text: "Review the parsed data, then confirm the delivery" },
-          { icon: "🧶", text: "Your yarn stock updates automatically by colour and lot" },
-          { icon: "🔗", text: "When creating production runs, link them to a yarn lot" },
-        ]}
-        tip="Tap a colour row to see individual lots with remaining stock."
-      />
+      {(() => {
+        const help = getHelpContent("materials", language);
+        return (
+          <ContextualHelp
+            pageId="materials"
+            title={help.title}
+            steps={help.steps}
+            tip={help.tip}
+          />
+        );
+      })()}
     </div>
   );
 }

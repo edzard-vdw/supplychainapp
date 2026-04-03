@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { ORDER_STATUS_DISPLAY, formatDate } from "@/types/supply-chain";
 import { StatusBadge } from "@/components/ui/badge";
+import { t } from "@/lib/i18n";
 
 export default async function PoViewPage({ params }: { params: Promise<{ orderId: string }> }) {
   const { orderId } = await params;
@@ -31,6 +32,7 @@ export default async function PoViewPage({ params }: { params: Promise<{ orderId
 
   const display = ORDER_STATUS_DISPLAY[order.status] ?? ORDER_STATUS_DISPLAY.DRAFT;
   const totalOrdered = order.orderLines.reduce((s, l) => s + l.quantity, 0);
+  const lang = session.language ?? "en";
 
   return (
     <div className="px-4 py-6 max-w-[700px] mx-auto">
@@ -40,7 +42,7 @@ export default async function PoViewPage({ params }: { params: Promise<{ orderId
         className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors mb-6"
       >
         <ArrowLeft size={14} />
-        Back to Jobs
+        {t("nav.jobs", lang)}
       </Link>
 
       {/* Header */}
@@ -59,13 +61,13 @@ export default async function PoViewPage({ params }: { params: Promise<{ orderId
       <div className="bg-card border border-border rounded-xl p-5 mb-4">
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
           <div>
-            <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Due Date</p>
+            <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-1">{t("order.due", lang)}</p>
             <p className="text-[13px] font-semibold text-foreground">
               {order.dueDate ? formatDate(order.dueDate) : "—"}
             </p>
           </div>
           <div>
-            <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Total Units</p>
+            <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-1">{t("jobs.units", lang)}</p>
             <p className="text-[13px] font-bold tabular-nums text-foreground">{totalOrdered.toLocaleString()}</p>
           </div>
           {order.season && (
@@ -93,10 +95,10 @@ export default async function PoViewPage({ params }: { params: Promise<{ orderId
         <table className="w-full text-[12px]">
           <thead className="bg-secondary/30">
             <tr>
-              <th className="text-left px-5 py-2.5 text-[9px] font-mono uppercase tracking-wider text-muted-foreground">Product</th>
-              <th className="text-left px-3 py-2.5 text-[9px] font-mono uppercase tracking-wider text-muted-foreground">Size</th>
+              <th className="text-left px-5 py-2.5 text-[9px] font-mono uppercase tracking-wider text-muted-foreground">{t("order.product", lang)}</th>
+              <th className="text-left px-3 py-2.5 text-[9px] font-mono uppercase tracking-wider text-muted-foreground">{t("order.size", lang)}</th>
               <th className="text-left px-3 py-2.5 text-[9px] font-mono uppercase tracking-wider text-muted-foreground">Colour</th>
-              <th className="text-right px-5 py-2.5 text-[9px] font-mono uppercase tracking-wider text-muted-foreground">Qty</th>
+              <th className="text-right px-5 py-2.5 text-[9px] font-mono uppercase tracking-wider text-muted-foreground">{t("order.quantity", lang)}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">

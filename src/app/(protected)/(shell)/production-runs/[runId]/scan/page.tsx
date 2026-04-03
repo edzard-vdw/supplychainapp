@@ -6,6 +6,7 @@ import Link from "next/link";
 import { ArrowLeft, QrCode, Nfc, Camera, CheckCircle, AlertTriangle, Keyboard, PartyPopper, ArrowRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { scanGarmentIntoRun } from "@/lib/actions/production-runs";
+import { t } from "@/lib/i18n";
 
 type ScanStep = "qr" | "nfc" | "saving";
 type InputMode = "camera" | "manual";
@@ -34,24 +35,26 @@ export default function RunScanPage() {
   const [finisherName, setFinisherName] = useState("");
   const [editingFinisher, setEditingFinisher] = useState(false);
   const [finisherDraft, setFinisherDraft] = useState("");
+  const [language, setLanguage] = useState("en");
 
   // Load run sizes on mount
   useEffect(() => {
-    fetch(`/api/auth/me`).then(() => {
-      import("@/lib/actions/production-runs").then(({ getProductionRun }) => {
-        getProductionRun(runId).then((run) => {
-          if (run?.runCode) setRunCode(run.runCode);
-          if (run?.finisherName) {
-            setFinisherName(run.finisherName);
-            setFinisherDraft(run.finisherName);
-          }
-          if (run?.sizeBreakdown && run.sizeBreakdown.length > 0) {
-            setSizes(run.sizeBreakdown.map((sb) => ({ id: sb.id, size: sb.size, quantity: sb.quantity, produced: sb.produced })));
-            // Auto-select first size with remaining capacity
-            const first = run.sizeBreakdown.find((sb) => sb.produced < sb.quantity);
-            if (first) setSelectedSizeId(first.id);
-          }
-        });
+    fetch(`/api/auth/me`).then((r) => r.json()).then((res) => {
+      if (res?.data?.language) setLanguage(res.data.language);
+    }).catch(() => {});
+    import("@/lib/actions/production-runs").then(({ getProductionRun }) => {
+      getProductionRun(runId).then((run) => {
+        if (run?.runCode) setRunCode(run.runCode);
+        if (run?.finisherName) {
+          setFinisherName(run.finisherName);
+          setFinisherDraft(run.finisherName);
+        }
+        if (run?.sizeBreakdown && run.sizeBreakdown.length > 0) {
+          setSizes(run.sizeBreakdown.map((sb) => ({ id: sb.id, size: sb.size, quantity: sb.quantity, produced: sb.produced })));
+          // Auto-select first size with remaining capacity
+          const first = run.sizeBreakdown.find((sb) => sb.produced < sb.quantity);
+          if (first) setSelectedSizeId(first.id);
+        }
       });
     });
   }, [runId]);
@@ -212,12 +215,12 @@ export default function RunScanPage() {
               </div>
             ) : (
               <p className="text-[10px] text-muted-foreground mt-0.5">
-                Scanning: <span className="font-semibold text-foreground">{finisherName}</span>
-                <button onClick={() => { setFinisherDraft(finisherName); setEditingFinisher(true); }} className="ml-1.5 text-[9px] text-muted-foreground hover:text-foreground underline">Edit</button>
+                {t("scan.finisher_set", language)} <span className="font-semibold text-foreground">{finisherName}</span>
+                <button onClick={() => { setFinisherDraft(finisherName); setEditingFinisher(true); }} className="ml-1.5 text-[9px] text-muted-foreground hover:text-foreground underline">{t("scan.finisher_edit", language)}</button>
               </p>
             )
           ) : (
-            <p className="text-[10px] text-badge-orange-text font-medium mt-0.5">No finisher set — go back to set one</p>
+            <p className="text-[10px] text-badge-orange-text font-medium mt-0.5">{t("scan.no_finisher", language)}</p>
           )}
         </div>
         <div className="flex items-center gap-1">
@@ -262,7 +265,7 @@ export default function RunScanPage() {
             )}
           </>
         ) : (
-          <p className="text-[18px] font-bold text-muted-foreground">Ready to scan</p>
+          <p className="text-[18px] font-bold text-muted-foreground">{t("scan.qr_ready", language)}</p>
         )}
       </div>
 

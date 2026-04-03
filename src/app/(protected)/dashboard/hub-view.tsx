@@ -6,9 +6,11 @@ import { useRouter } from "next/navigation";
 import { Menu, X, Zap, Plus, Settings } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { getSectionsForRole, QUICK_ACTION } from "@/lib/sections";
+import { t } from "@/lib/i18n";
 
 interface HubViewProps {
   user: { name: string; role: string; supplierId: number | null; supplierName: string | null };
+  language: string;
   stats: {
     orderCount: number;
     runCount: number;
@@ -33,7 +35,7 @@ const RADIAL_LINES = Array.from({ length: 16 }).map((_, i) => {
   };
 });
 
-export function HubView({ user, stats }: HubViewProps) {
+export function HubView({ user, language, stats }: HubViewProps) {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -139,7 +141,7 @@ export function HubView({ user, stats }: HubViewProps) {
                       className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-all"
                     >
                       <Icon size={18} strokeWidth={1.5} style={{ color: s.color }} />
-                      <span className="text-sm font-medium">{s.label.replace(".", "")}</span>
+                      <span className="text-sm font-medium">{t(s.labelKey, language)}</span>
                     </Link>
                   );
                 })}
@@ -151,7 +153,7 @@ export function HubView({ user, stats }: HubViewProps) {
                   className="flex items-center gap-3 px-6 py-3 text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-all"
                 >
                   <Settings size={16} strokeWidth={1.5} />
-                  <span className="text-sm font-medium">Settings</span>
+                  <span className="text-sm font-medium">{t("hub.settings", language)}</span>
                 </Link>
               </div>
               <div className="p-4 border-t border-border flex items-center gap-3">
@@ -160,7 +162,7 @@ export function HubView({ user, stats }: HubViewProps) {
                   <p className="text-sm font-medium text-foreground truncate">{user.name}</p>
                   <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{user.role}</p>
                 </div>
-                <button onClick={handleLogout} className="text-xs text-muted-foreground hover:text-foreground">Sign out</button>
+                <button onClick={handleLogout} className="text-xs text-muted-foreground hover:text-foreground">{t("hub.signout", language)}</button>
               </div>
             </motion.aside>
           </>
@@ -212,7 +214,7 @@ export function HubView({ user, stats }: HubViewProps) {
         <div className="md:ml-14 px-6 md:px-8 relative z-10 shrink-0">
           <div className="py-3 text-center md:text-left">
             <p className="text-[10px] font-mono-brand uppercase tracking-widest text-muted-foreground">
-              Supplier Portal
+              {t("hub.supplier_portal", language)}
             </p>
             <p className="text-[14px] font-bold text-foreground">
               {user.supplierName}
@@ -229,9 +231,9 @@ export function HubView({ user, stats }: HubViewProps) {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-[12px] font-semibold text-foreground">
-                  {stats.pendingOrders === 1 ? "New order needs your attention" : `${stats.pendingOrders} new orders need your attention`}
+                  {stats.pendingOrders === 1 ? t("hub.pending_single", language) : `${stats.pendingOrders} ${t("hub.pending_many", language)}`}
                 </p>
-                <p className="text-[10px] text-badge-blue-text">Tap to review and accept →</p>
+                <p className="text-[10px] text-badge-blue-text">{t("hub.tap_review", language)}</p>
               </div>
             </Link>
           )}
@@ -247,7 +249,7 @@ export function HubView({ user, stats }: HubViewProps) {
               <Link
                 key={section.id}
                 href={section.routePrefix}
-                className="group flex flex-col items-center gap-3 outline-none shrink-0"
+                className="group flex flex-col items-center gap-3 outline-none shrink-0 w-28"
               >
                 <div
                   className="relative w-24 h-24 rounded-full border-2 flex items-center justify-center transition-all duration-300 group-hover:scale-110 bg-card"
@@ -279,10 +281,10 @@ export function HubView({ user, stats }: HubViewProps) {
 
                 <div className="text-center flex flex-col justify-start">
                   <p className="text-[10px] lg:text-[11px] font-bold uppercase tracking-[0.12em] text-foreground leading-tight whitespace-pre-line">
-                    {section.label}
+                    {t(section.labelKey, language).toUpperCase()}.
                   </p>
                   <p className="text-[8px] lg:text-[9px] text-muted-foreground mt-0.5 leading-snug whitespace-nowrap">
-                    {section.description}
+                    {t(section.descKey, language)}
                   </p>
                 </div>
               </Link>
@@ -364,10 +366,10 @@ export function HubView({ user, stats }: HubViewProps) {
             className="text-center mt-6"
           >
             <p className="text-[15px] font-bold uppercase tracking-[0.15em] text-foreground">
-              {activeSection.label}
+              {t(activeSection.labelKey, language).toUpperCase()}.
             </p>
             <p className="text-[12px] text-muted-foreground mt-1">
-              {activeSection.description}
+              {t(activeSection.descKey, language)}
             </p>
           </motion.div>
         </AnimatePresence>

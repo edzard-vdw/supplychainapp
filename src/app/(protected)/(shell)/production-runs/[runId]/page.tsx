@@ -50,6 +50,7 @@ export default async function ProductionRunDetailPage({ params }: { params: Prom
       orderLines={JSON.parse(JSON.stringify(orderLines))}
       yarnLots={JSON.parse(JSON.stringify(yarnLots))}
       role={session.role}
+      language={session.language ?? "en"}
     />
   );
 }

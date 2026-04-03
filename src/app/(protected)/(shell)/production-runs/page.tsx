@@ -66,6 +66,7 @@ export default async function ProductionRunsPage({ searchParams }: { searchParam
         activeRuns={JSON.parse(JSON.stringify(activeRuns))}
         allOrders={JSON.parse(JSON.stringify(allOrders))}
         yarnLots={JSON.parse(JSON.stringify(yarnLots))}
+        language={session.language ?? "en"}
       />
     );
   }

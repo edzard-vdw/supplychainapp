@@ -22,6 +22,7 @@ export default async function SettingsPage() {
             contactName: true,
             contactEmail: true,
             isActive: true,
+            language: true,
             _count: { select: { users: true } },
           },
         }),
@@ -32,6 +33,9 @@ export default async function SettingsPage() {
     <SettingsClient
       isAdmin={isAdmin}
       currentUserId={session.userId}
+      currentUserName={session.name}
+      currentUserEmail={session.email}
+      currentUserLanguage={session.language ?? "en"}
       users={JSON.parse(JSON.stringify(users))}
       suppliers={JSON.parse(JSON.stringify(suppliers))}
     />

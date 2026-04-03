@@ -30,6 +30,7 @@ type RunWithRelations = {
   expectedExFactory: string | null;
   notes: string | null;
   createdAt: string;
+  updatedAt: string;
   supplier: { id: number; name: string } | null;
   orderLine: {
     id: number;
@@ -79,14 +80,22 @@ export function ProductionRunsClient({
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
   const [search, setSearch] = useState("");
-  const statusOrder = getRunStatusOrder(isAdmin ? "ADMIN" : "SUPPLIER");
+  // Admin pipeline: PLANNED → IN_PRODUCTION → QC → SHIPPING → RECEIVED (terminal)
+  const statusOrder: readonly string[] = isAdmin
+    ? (["PLANNED", "IN_PRODUCTION", "QC", "SHIPPED", "RECEIVED"] as const)
+    : getRunStatusOrder("SUPPLIER");
   const [visibleColumns, setVisibleColumns] = useState<Set<string>>(new Set(statusOrder));
+  const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+  const isRecentlyCompleted = (run: RunWithRelations) =>
+    Date.now() - new Date(run.updatedAt ?? run.createdAt).getTime() < SEVEN_DAYS_MS;
   const [viewMode, setViewMode] = useState<"list" | "pipeline">(isAdmin ? "pipeline" : "list");
   const [showCreate, setShowCreate] = useState(false);
   const [batchLines, setBatchLines] = useState<OrderLineDetail[]>([]); // Lines to batch-create runs for
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [expandedOrderId, setExpandedOrderId] = useState<number | null>(null);
   const [dragRunId, setDragRunId] = useState<number | null>(null);
+  const [receiptRunId, setReceiptRunId] = useState<number | null>(null);
+  const [archiveOpen, setArchiveOpen] = useState(false);
 
   // Inline form state — which order card has the form open inside it
   const [inlineFormOrderId, setInlineFormOrderId] = useState<number | null>(null);
@@ -927,112 +936,206 @@ export function ProductionRunsClient({
 
       {/* ── Pipeline / Kanban View ── */}
       {viewMode === "pipeline" && (
-        <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-none -mx-2 px-2">
-          {statusOrder.filter((s) => visibleColumns.has(s)).map((status) => {
-            const display = RUN_STATUS_DISPLAY[status];
-            const columnRuns = filtered.filter((r) => r.status === status);
-            return (
-              <div
-                key={status}
-                className="flex flex-col w-[220px] shrink-0 bg-card border border-border rounded-xl overflow-hidden"
-                onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add("ring-2", "ring-primary/30"); }}
-                onDragLeave={(e) => { e.currentTarget.classList.remove("ring-2", "ring-primary/30"); }}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  e.currentTarget.classList.remove("ring-2", "ring-primary/30");
-                  if (dragRunId) handleDrop(dragRunId, status);
-                }}
-              >
-                {/* Column header */}
-                <div className="px-3 py-2.5 border-b border-border bg-secondary/30">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[9px] font-bold uppercase tracking-wider text-foreground">{display?.label || status}</span>
-                    <span className="text-[9px] font-mono-brand text-muted-foreground tabular-nums">{columnRuns.length}</span>
+        <>
+          <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-none -mx-2 px-2">
+            {statusOrder.filter((s) => visibleColumns.has(s)).map((status) => {
+              const display = RUN_STATUS_DISPLAY[status];
+              // "Received" column: show both RECEIVED and legacy COMPLETED runs
+              const columnRuns = status === "RECEIVED"
+                ? filtered.filter((r) => (r.status === "RECEIVED" || r.status === "COMPLETED") && isRecentlyCompleted(r))
+                : filtered.filter((r) => r.status === status);
+              const isDoneColumn = status === "RECEIVED";
+              return (
+                <div
+                  key={status}
+                  className="flex flex-col w-[220px] shrink-0 bg-card border border-border rounded-xl overflow-hidden"
+                  onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add("ring-2", "ring-primary/30"); }}
+                  onDragLeave={(e) => { e.currentTarget.classList.remove("ring-2", "ring-primary/30"); }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.currentTarget.classList.remove("ring-2", "ring-primary/30");
+                    if (dragRunId) handleDrop(dragRunId, status);
+                  }}
+                >
+                  {/* Column header */}
+                  <div className="px-3 py-2.5 border-b border-border bg-secondary/30">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[9px] font-bold uppercase tracking-wider text-foreground">
+                        {isDoneColumn ? "Received" : (display?.label || status)}
+                      </span>
+                      <span className="text-[9px] font-mono-brand text-muted-foreground tabular-nums">{columnRuns.length}</span>
+                    </div>
+                  </div>
+
+                  {/* Cards */}
+                  <div className="flex-1 p-2 space-y-2 min-h-[120px] max-h-[60vh] overflow-y-auto">
+                    {columnRuns.map((run) => (
+                      <div
+                        key={run.id}
+                        draggable
+                        onDragStart={() => setDragRunId(run.id)}
+                        onDragEnd={() => setDragRunId(null)}
+                        className={`bg-background border rounded-lg p-2.5 cursor-grab active:cursor-grabbing hover:border-foreground/20 transition-all ${
+                          dragRunId === run.id ? "opacity-50 scale-95" : ""
+                        } ${run.expectedExFactory && new Date(run.expectedExFactory) < new Date() && run.status !== "RECEIVED" && run.status !== "COMPLETED" ? "border-badge-red-text/40 bg-badge-red-bg/10" : "border-border"}`}
+                      >
+                        <div className="flex items-center gap-1.5 mb-1.5">
+                          <GripVertical size={10} className="text-muted-foreground/40 shrink-0" />
+                          <Link href={`/production-runs/${run.id}`} className="text-[11px] font-semibold text-foreground hover:underline truncate">
+                            {run.runCode}
+                          </Link>
+                        </div>
+                        <p className="text-[9px] text-muted-foreground truncate mb-1">
+                          {run.productName || run.orderLine?.product || "—"}
+                          {run.productColor && <span className="text-foreground"> · {run.productColor}</span>}
+                        </p>
+                        {/* Size breakdown */}
+                        {run.sizeBreakdown.length > 0 ? (
+                          <div className="flex flex-wrap gap-1 mb-1">
+                            {run.sizeBreakdown.map((sb) => (
+                              <span key={sb.id} className="text-[7px] font-mono-brand px-1 py-0.5 rounded bg-secondary text-foreground">
+                                {sb.size.split(" - ")[0] || sb.size} <span className="text-muted-foreground">×{sb.quantity}</span>
+                              </span>
+                            ))}
+                          </div>
+                        ) : run.productSize && (
+                          <p className="text-[8px] text-muted-foreground mb-1">Size: {run.productSize}</p>
+                        )}
+                        {(run.order || run.orderLine) && (
+                          <p className="text-[8px] text-muted-foreground/60 truncate">
+                            {run.order?.orderRef || run.orderLine?.order.orderRef}
+                          </p>
+                        )}
+                        <div className="flex items-center justify-between">
+                          <span className="text-[9px] font-mono-brand text-muted-foreground tabular-nums">{run.unitsProduced}/{run.quantity}</span>
+                          {run.supplier && (
+                            <span className="text-[8px] text-muted-foreground truncate max-w-[80px]">{run.supplier.name}</span>
+                          )}
+                        </div>
+                        {run.quantity > 0 && (
+                          <div className="mt-1.5 h-1 bg-muted rounded-full overflow-hidden">
+                            <div
+                              className="h-full rounded-full"
+                              style={{
+                                width: `${(run.unitsProduced / run.quantity) * 100}%`,
+                                backgroundColor: "hsl(142 76% 36%)",
+                              }}
+                            />
+                          </div>
+                        )}
+                        <div className="flex items-center gap-1.5 mt-2">
+                          {run.status === "QC" && (
+                            <Link
+                              href={`/production-runs/${run.id}/scan`}
+                              className="text-[8px] font-bold uppercase tracking-wider px-2 py-0.5 rounded text-white"
+                              style={{ backgroundColor: "hsl(25 95% 53%)" }}
+                            >
+                              Scan
+                            </Link>
+                          )}
+                          {/* SHIPPED: inline receipt confirmation */}
+                          {run.status === "SHIPPED" && isAdmin && receiptRunId !== run.id && (
+                            <button
+                              onClick={() => setReceiptRunId(run.id)}
+                              className="text-[8px] font-bold uppercase tracking-wider px-2 py-0.5 rounded text-white"
+                              style={{ backgroundColor: "hsl(142 76% 36%)" }}
+                            >
+                              ✓ Receive
+                            </button>
+                          )}
+                          <Link href={`/production-runs/${run.id}`} className="text-[8px] text-primary hover:underline">
+                            Details
+                          </Link>
+                        </div>
+                        {/* Inline receipt confirmation */}
+                        {run.status === "SHIPPED" && receiptRunId === run.id && (
+                          <div className="mt-2 pt-2 border-t border-border space-y-1.5">
+                            <p className="text-[9px] font-semibold text-foreground">Confirm goods received?</p>
+                            <p className="text-[8px] text-muted-foreground">This will mark the run as Received.</p>
+                            <div className="flex gap-1.5">
+                              <button
+                                onClick={() => {
+                                  setReceiptRunId(null);
+                                  startTransition(async () => {
+                                    await updateProductionRun(run.id, { status: "RECEIVED" });
+                                    router.refresh();
+                                  });
+                                }}
+                                disabled={isPending}
+                                className="flex-1 py-1 rounded text-[9px] font-bold text-white disabled:opacity-50"
+                                style={{ backgroundColor: "hsl(142 76% 36%)" }}
+                              >
+                                {isPending ? "..." : "Confirm"}
+                              </button>
+                              <button
+                                onClick={() => setReceiptRunId(null)}
+                                className="px-2 py-1 rounded text-[9px] text-muted-foreground hover:text-foreground border border-border"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                    {columnRuns.length === 0 && (
+                      <div className="flex items-center justify-center h-20 text-[9px] text-muted-foreground/40">
+                        {isDoneColumn ? "No recent receipts" : "Drop here"}
+                      </div>
+                    )}
                   </div>
                 </div>
+              );
+            })}
+          </div>
 
-                {/* Cards */}
-                <div className="flex-1 p-2 space-y-2 min-h-[120px] max-h-[60vh] overflow-y-auto">
-                  {columnRuns.map((run) => (
-                    <div
-                      key={run.id}
-                      draggable
-                      onDragStart={() => setDragRunId(run.id)}
-                      onDragEnd={() => setDragRunId(null)}
-                      className={`bg-background border rounded-lg p-2.5 cursor-grab active:cursor-grabbing hover:border-foreground/20 transition-all ${
-                        dragRunId === run.id ? "opacity-50 scale-95" : ""
-                      } ${run.expectedExFactory && new Date(run.expectedExFactory) < new Date() && run.status !== "COMPLETED" && run.status !== "RECEIVED" ? "border-badge-red-text/40 bg-badge-red-bg/10" : "border-border"}`}
-                    >
-                      <div className="flex items-center gap-1.5 mb-1.5">
-                        <GripVertical size={10} className="text-muted-foreground/40 shrink-0" />
-                        <Link href={`/production-runs/${run.id}`} className="text-[11px] font-semibold text-foreground hover:underline truncate">
-                          {run.runCode}
+          {/* ── Archive toggle ── */}
+          {isAdmin && (
+            <div className="mt-2">
+              <button
+                onClick={() => setArchiveOpen((v) => !v)}
+                className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <span className={`transition-transform ${archiveOpen ? "rotate-90" : ""}`}>›</span>
+                Archive
+                <span className="text-[9px] font-mono-brand">
+                  ({filtered.filter((r) => (r.status === "RECEIVED" || r.status === "COMPLETED") && !isRecentlyCompleted(r)).length})
+                </span>
+              </button>
+              {archiveOpen && (
+                <div className="mt-3 bg-card border border-border rounded-xl overflow-hidden">
+                  <div className="px-4 py-2.5 border-b border-border bg-secondary/20">
+                    <p className="text-[9px] font-mono-brand uppercase tracking-widest text-muted-foreground">Received — older than 7 days</p>
+                  </div>
+                  <div className="divide-y divide-border">
+                    {filtered
+                      .filter((r) => (r.status === "RECEIVED" || r.status === "COMPLETED") && !isRecentlyCompleted(r))
+                      .map((run) => (
+                        <Link
+                          key={run.id}
+                          href={`/production-runs/${run.id}`}
+                          className="flex items-center gap-4 px-4 py-3 hover:bg-secondary/20 transition-colors"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[11px] font-semibold text-foreground">{run.runCode}</p>
+                            <p className="text-[9px] text-muted-foreground truncate">
+                              {run.productName || run.orderLine?.product || "—"}
+                              {run.supplier ? ` · ${run.supplier.name}` : ""}
+                            </p>
+                          </div>
+                          <span className="text-[10px] font-mono-brand text-muted-foreground tabular-nums">{run.quantity} units</span>
+                          <span className="text-[9px] text-muted-foreground">{new Date(run.updatedAt ?? run.createdAt).toLocaleDateString()}</span>
                         </Link>
-                      </div>
-                      <p className="text-[9px] text-muted-foreground truncate mb-1">
-                        {run.productName || run.orderLine?.product || "—"}
-                        {run.productColor && <span className="text-foreground"> · {run.productColor}</span>}
-                      </p>
-                      {/* Size breakdown */}
-                      {run.sizeBreakdown.length > 0 ? (
-                        <div className="flex flex-wrap gap-1 mb-1">
-                          {run.sizeBreakdown.map((sb) => (
-                            <span key={sb.id} className="text-[7px] font-mono-brand px-1 py-0.5 rounded bg-secondary text-foreground">
-                              {sb.size.split(" - ")[0] || sb.size} <span className="text-muted-foreground">×{sb.quantity}</span>
-                            </span>
-                          ))}
-                        </div>
-                      ) : run.productSize && (
-                        <p className="text-[8px] text-muted-foreground mb-1">Size: {run.productSize}</p>
-                      )}
-                      {(run.order || run.orderLine) && (
-                        <p className="text-[8px] text-muted-foreground/60 truncate">
-                          {run.order?.orderRef || run.orderLine?.order.orderRef}
-                        </p>
-                      )}
-                      <div className="flex items-center justify-between">
-                        <span className="text-[9px] font-mono-brand text-muted-foreground tabular-nums">{run.unitsProduced}/{run.quantity}</span>
-                        {run.supplier && (
-                          <span className="text-[8px] text-muted-foreground truncate max-w-[80px]">{run.supplier.name}</span>
-                        )}
-                      </div>
-                      {run.quantity > 0 && (
-                        <div className="mt-1.5 h-1 bg-muted rounded-full overflow-hidden">
-                          <div
-                            className="h-full rounded-full"
-                            style={{
-                              width: `${(run.unitsProduced / run.quantity) * 100}%`,
-                              backgroundColor: "hsl(142 76% 36%)",
-                            }}
-                          />
-                        </div>
-                      )}
-                      <div className="flex items-center gap-1.5 mt-2">
-                        {run.status === "QC" && (
-                          <Link
-                            href={`/production-runs/${run.id}/scan`}
-                            className="text-[8px] font-bold uppercase tracking-wider px-2 py-0.5 rounded text-white"
-                            style={{ backgroundColor: "hsl(25 95% 53%)" }}
-                          >
-                            Scan
-                          </Link>
-                        )}
-                        <Link href={`/production-runs/${run.id}`} className="text-[8px] text-primary hover:underline">
-                          Details
-                        </Link>
-                      </div>
-                    </div>
-                  ))}
-                  {columnRuns.length === 0 && (
-                    <div className="flex items-center justify-center h-20 text-[9px] text-muted-foreground/40">
-                      Drop here
-                    </div>
-                  )}
+                      ))}
+                    {filtered.filter((r) => r.status === "COMPLETED" && !isRecentlyCompleted(r)).length === 0 && (
+                      <p className="px-4 py-6 text-[11px] text-muted-foreground text-center">No archived runs yet</p>
+                    )}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              )}
+            </div>
+          )}
+        </>
       )}
 
       {/* ── List View ── */}

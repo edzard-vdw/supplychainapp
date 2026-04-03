@@ -34,12 +34,17 @@ export function OrdersClient({
   suppliers,
   isAdmin,
   showUploadOnLoad,
+  showCreateOnLoad,
+  embedded = false,
 }: {
   initialOrders: OrderWithCount[];
   materials: { id: number; name: string; hexValue: string | null }[];
   suppliers: SupplierOption[];
   isAdmin: boolean;
   showUploadOnLoad?: boolean;
+  showCreateOnLoad?: boolean;
+  /** When true, hides the page title/header (used when embedded inside another page) */
+  embedded?: boolean;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -49,8 +54,27 @@ export function OrdersClient({
   const [newRef, setNewRef] = useState("");
   const [newClient, setNewClient] = useState("");
   const [newSupplierId, setNewSupplierId] = useState<number | null>(null);
-  const [newQty, setNewQty] = useState(0);
   const [newDueDate, setNewDueDate] = useState("");
+
+  // Inline line items for manual order creation
+  type DraftLine = { product: string; style: string; colorId: number | null; size: string; quantity: number; unitPrice: string };
+  const emptyLine = (): DraftLine => ({ product: "", style: "", colorId: null, size: "", quantity: 0, unitPrice: "" });
+  const [draftLines, setDraftLines] = useState<DraftLine[]>([emptyLine()]);
+
+  function updateLine(idx: number, field: keyof DraftLine, value: DraftLine[keyof DraftLine]) {
+    setDraftLines((prev) => prev.map((l, i) => i === idx ? { ...l, [field]: value } : l));
+  }
+  function addDraftLine() {
+    setDraftLines((prev) => [...prev, emptyLine()]);
+  }
+  function removeDraftLine(idx: number) {
+    setDraftLines((prev) => prev.length > 1 ? prev.filter((_, i) => i !== idx) : prev);
+  }
+  function resetCreate() {
+    setNewRef(""); setNewClient(""); setNewSupplierId(null); setNewDueDate("");
+    setDraftLines([emptyLine()]);
+    setShowCreate(false);
+  }
 
   // PO upload — supports both Excel and PDF
   const [showPOUpload, setShowPOUpload] = useState(false);
@@ -62,7 +86,8 @@ export function OrdersClient({
 
   useEffect(() => {
     if (showUploadOnLoad) setShowPOUpload(true);
-  }, [showUploadOnLoad]);
+    if (showCreateOnLoad) setShowCreate(true);
+  }, [showUploadOnLoad, showCreateOnLoad]);
 
   function handlePODrop(e: React.DragEvent) {
     e.preventDefault();
@@ -163,24 +188,44 @@ export function OrdersClient({
   async function handleCreate() {
     if (!newRef.trim()) return;
     startTransition(async () => {
+      // Calculate total qty from lines
+      const validLines = draftLines.filter((l) => l.product.trim());
+      const totalQty = validLines.reduce((s, l) => s + (l.quantity || 0), 0);
+
       const result = await createOrder({
         orderRef: newRef.trim(),
         client: newClient || null,
         supplierId: newSupplierId,
-        totalQuantity: newQty,
+        totalQuantity: totalQty,
         dueDate: newDueDate || null,
       });
-      setNewRef("");
-      setNewClient("");
-      setNewSupplierId(null);
-      setNewQty(0);
-      setNewDueDate("");
-      setShowCreate(false);
-      if (result.success && result.data) {
-        router.push(`/orders/${result.data.id}`);
-      } else {
+
+      if (!result.success || !result.data) {
         router.refresh();
+        return;
       }
+
+      const orderId = result.data.id;
+
+      // Create each order line
+      if (validLines.length > 0) {
+        const { createOrderLine } = await import("@/lib/actions/orders");
+        for (const line of validLines) {
+          await createOrderLine({
+            orderId,
+            product: line.product.trim(),
+            style: line.style.trim() || null,
+            colorId: line.colorId,
+            size: line.size || null,
+            quantity: line.quantity,
+            unitPrice: line.unitPrice !== "" ? parseFloat(line.unitPrice) : null,
+          });
+        }
+      }
+
+      resetCreate();
+      // If no lines were added, open the Add Line form on the detail page
+      router.push(validLines.length === 0 ? `/orders/${orderId}?addLine=true` : `/orders/${orderId}`);
     });
   }
 
@@ -192,8 +237,9 @@ export function OrdersClient({
   }
 
   return (
-    <div className="px-6 py-8 max-w-[1200px] mx-auto">
-      {/* Header */}
+    <div className={embedded ? "" : "px-6 py-8 max-w-[1200px] mx-auto"}>
+      {/* Header — hidden when embedded (parent page handles it) */}
+      {!embedded && (
       <div className="flex items-start justify-between mb-6">
         <div>
           <p className="text-[10px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1">Orders</p>
@@ -219,6 +265,7 @@ export function OrdersClient({
           </div>
         )}
       </div>
+      )}
 
       {/* Create form */}
       {/* PO Upload */}
@@ -428,15 +475,17 @@ export function OrdersClient({
       )}
 
       {showCreate && (
-        <div className="bg-card border border-border rounded-xl p-5 mb-6 space-y-4">
-          <h3 className="text-[12px] font-bold uppercase tracking-wider text-foreground">New Order</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="bg-card border border-border rounded-xl p-5 mb-6 space-y-5">
+          <h3 className="text-[12px] font-bold uppercase tracking-wider text-foreground">New Manual Order</h3>
+
+          {/* ── Order header ── */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div>
-              <label className="block text-[10px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1">Order / PO Ref *</label>
+              <label className="block text-[10px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1">PO Ref *</label>
               <input value={newRef} onChange={(e) => setNewRef(e.target.value)} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-[12px] text-foreground outline-none focus:ring-1 focus:ring-ring" placeholder="PO-2026-001" />
             </div>
             <div>
-              <label className="block text-[10px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1">Assign Supplier</label>
+              <label className="block text-[10px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1">Supplier</label>
               <select value={newSupplierId ?? ""} onChange={(e) => setNewSupplierId(e.target.value ? parseInt(e.target.value) : null)} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-[12px] text-foreground outline-none focus:ring-1 focus:ring-ring">
                 <option value="">— Unassigned —</option>
                 {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -444,22 +493,111 @@ export function OrdersClient({
             </div>
             <div>
               <label className="block text-[10px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1">Client</label>
-              <input value={newClient} onChange={(e) => setNewClient(e.target.value)} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-[12px] text-foreground outline-none focus:ring-1 focus:ring-ring" placeholder="Sheep Inc." />
-            </div>
-            <div>
-              <label className="block text-[10px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1">Quantity</label>
-              <input type="number" value={newQty} onChange={(e) => setNewQty(parseInt(e.target.value) || 0)} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-[12px] font-mono-brand text-foreground outline-none focus:ring-1 focus:ring-ring text-right" />
+              <input value={newClient} onChange={(e) => setNewClient(e.target.value)} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-[12px] text-foreground outline-none focus:ring-1 focus:ring-ring" placeholder="e.g. Sheep Inc." />
             </div>
             <div>
               <label className="block text-[10px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1">Due Date</label>
               <input type="date" value={newDueDate} onChange={(e) => setNewDueDate(e.target.value)} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-[12px] text-foreground outline-none focus:ring-1 focus:ring-ring" />
             </div>
           </div>
-          <div className="flex items-center gap-3 pt-2">
-            <button onClick={handleCreate} disabled={isPending || !newRef.trim()} className="px-4 py-2 rounded-lg bg-foreground text-background text-[11px] font-semibold uppercase tracking-wider hover:bg-foreground/90 disabled:opacity-50 transition-colors">
+
+          {/* ── Order lines ── */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[10px] font-mono-brand uppercase tracking-widest text-muted-foreground">Order Lines</p>
+              <button
+                onClick={addDraftLine}
+                className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-primary hover:text-primary/80 transition-colors"
+              >
+                <Plus size={11} /> Add Line
+              </button>
+            </div>
+
+            {/* Column headers */}
+            <div className="hidden sm:grid grid-cols-[2fr_1fr_1fr_1fr_0.8fr_0.8fr_24px] gap-2 px-1 mb-1">
+              {["Product *", "SKU / Style", "Colour", "Size", "Qty", "Unit Price", ""].map((h) => (
+                <p key={h} className="text-[9px] font-mono-brand uppercase tracking-widest text-muted-foreground">{h}</p>
+              ))}
+            </div>
+
+            <div className="space-y-2">
+              {draftLines.map((line, idx) => (
+                <div key={idx} className="grid grid-cols-2 sm:grid-cols-[2fr_1fr_1fr_1fr_0.8fr_0.8fr_24px] gap-2 items-center">
+                  <input
+                    value={line.product}
+                    onChange={(e) => updateLine(idx, "product", e.target.value)}
+                    placeholder="Product name"
+                    className="col-span-2 sm:col-span-1 px-2.5 py-1.5 bg-background border border-border rounded-lg text-[11px] text-foreground outline-none focus:ring-1 focus:ring-ring"
+                  />
+                  <input
+                    value={line.style}
+                    onChange={(e) => updateLine(idx, "style", e.target.value)}
+                    placeholder="SKU / Style"
+                    className="px-2.5 py-1.5 bg-background border border-border rounded-lg text-[11px] font-mono-brand text-foreground outline-none focus:ring-1 focus:ring-ring"
+                  />
+                  <select
+                    value={line.colorId ?? ""}
+                    onChange={(e) => updateLine(idx, "colorId", e.target.value ? parseInt(e.target.value) : null)}
+                    className="px-2.5 py-1.5 bg-background border border-border rounded-lg text-[11px] text-foreground outline-none focus:ring-1 focus:ring-ring"
+                  >
+                    <option value="">— Colour —</option>
+                    {materials.map((m) => (
+                      <option key={m.id} value={m.id}>{m.name}</option>
+                    ))}
+                  </select>
+                  <input
+                    value={line.size}
+                    onChange={(e) => updateLine(idx, "size", e.target.value)}
+                    placeholder="e.g. M"
+                    className="px-2.5 py-1.5 bg-background border border-border rounded-lg text-[11px] text-foreground outline-none focus:ring-1 focus:ring-ring"
+                  />
+                  <input
+                    type="number"
+                    min="0"
+                    value={line.quantity || ""}
+                    onChange={(e) => updateLine(idx, "quantity", parseInt(e.target.value) || 0)}
+                    placeholder="0"
+                    className="px-2.5 py-1.5 bg-background border border-border rounded-lg text-[11px] font-mono-brand text-foreground outline-none focus:ring-1 focus:ring-ring text-right"
+                  />
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={line.unitPrice}
+                    onChange={(e) => updateLine(idx, "unitPrice", e.target.value)}
+                    placeholder="0.00"
+                    className="px-2.5 py-1.5 bg-background border border-border rounded-lg text-[11px] font-mono-brand text-foreground outline-none focus:ring-1 focus:ring-ring text-right"
+                  />
+                  <button
+                    onClick={() => removeDraftLine(idx)}
+                    disabled={draftLines.length === 1}
+                    className="w-6 h-6 flex items-center justify-center rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-20"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {/* Total */}
+            {draftLines.some((l) => l.quantity > 0) && (
+              <div className="flex justify-end mt-2 pr-8">
+                <span className="text-[11px] font-mono-brand text-muted-foreground">
+                  Total: <span className="font-bold text-foreground">{draftLines.reduce((s, l) => s + (l.quantity || 0), 0).toLocaleString()} units</span>
+                </span>
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center gap-3 pt-1">
+            <button
+              onClick={handleCreate}
+              disabled={isPending || !newRef.trim()}
+              className="px-4 py-2 rounded-lg bg-foreground text-background text-[11px] font-semibold uppercase tracking-wider hover:bg-foreground/90 disabled:opacity-50 transition-colors"
+            >
               {isPending ? "Creating..." : "Create Order"}
             </button>
-            <button onClick={() => setShowCreate(false)} className="px-4 py-2 rounded-lg text-[11px] text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
+            <button onClick={resetCreate} className="px-4 py-2 rounded-lg text-[11px] text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
           </div>
         </div>
       )}

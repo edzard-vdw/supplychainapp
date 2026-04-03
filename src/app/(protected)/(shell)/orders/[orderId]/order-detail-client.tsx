@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useTransition, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ContextualHelp } from "@/components/ui/contextual-help";
 import { ArrowLeft, Plus, ChevronDown, ChevronUp, Trash2, Upload, FileSpreadsheet, Pencil, History, CheckCircle } from "lucide-react";
@@ -48,13 +48,27 @@ type SupplierOption = { id: number; name: string; type: string };
 
 export function OrderDetailClient({ order, materials, suppliers, editHistory, userRole, userName, existingSeasons, existingTags }: { order: OrderFull; materials: Material[]; suppliers: SupplierOption[]; editHistory: EditLogEntry[]; userRole: string; userName: string; existingSeasons: string[]; existingTags: string[] }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
   const [expandedLineId, setExpandedLineId] = useState<number | null>(null);
   const [showAddLine, setShowAddLine] = useState(false);
+
+  // Auto-open Add Line form when arriving from "Manual Order" create flow
+  useEffect(() => {
+    if (searchParams.get("addLine") === "true") {
+      setShowAddLine(true);
+      // Scroll to the order lines section smoothly
+      setTimeout(() => {
+        document.getElementById("order-lines-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 200);
+    }
+  }, [searchParams]);
   const [newProduct, setNewProduct] = useState("");
+  const [newStyle, setNewStyle] = useState("");
   const [newColorId, setNewColorId] = useState<number | null>(null);
   const [newSize, setNewSize] = useState("");
   const [newQty, setNewQty] = useState(0);
+  const [newUnitPrice, setNewUnitPrice] = useState<string>("");
   const [showPOUpload, setShowPOUpload] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [revertConfirm, setRevertConfirm] = useState<string | null>(null);
@@ -132,14 +146,18 @@ export function OrderDetailClient({ order, materials, suppliers, editHistory, us
       await createOrderLine({
         orderId: order.id,
         product: newProduct.trim(),
+        style: newStyle.trim() || null,
         colorId: newColorId,
         size: newSize || null,
         quantity: newQty,
+        unitPrice: newUnitPrice !== "" ? parseFloat(newUnitPrice) : null,
       });
       setNewProduct("");
+      setNewStyle("");
       setNewColorId(null);
       setNewSize("");
       setNewQty(0);
+      setNewUnitPrice("");
       setShowAddLine(false);
       router.refresh();
     });
@@ -519,7 +537,7 @@ export function OrderDetailClient({ order, materials, suppliers, editHistory, us
       )}
 
       {/* Order lines header */}
-      <div className="flex items-center justify-between mb-4">
+      <div id="order-lines-section" className="flex items-center justify-between mb-4">
         <h2 className="text-[12px] font-bold uppercase tracking-wider text-foreground">Order Lines</h2>
         {canEdit && (
         <div className="flex items-center gap-3">
@@ -542,11 +560,17 @@ export function OrderDetailClient({ order, materials, suppliers, editHistory, us
       {/* Add line form */}
       {showAddLine && (
         <div className="bg-card border border-border rounded-xl p-4 mb-4 space-y-3">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <div className="sm:col-span-2">
               <label className="block text-[9px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1">Product *</label>
               <input value={newProduct} onChange={(e) => setNewProduct(e.target.value)} className="w-full px-2.5 py-1.5 bg-background border border-border rounded-lg text-[11px] text-foreground outline-none focus:ring-1 focus:ring-ring" placeholder="e.g. The Crewneck" />
             </div>
+            <div>
+              <label className="block text-[9px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1">SKU / Style</label>
+              <input value={newStyle} onChange={(e) => setNewStyle(e.target.value)} className="w-full px-2.5 py-1.5 bg-background border border-border rounded-lg text-[11px] font-mono-brand text-foreground outline-none focus:ring-1 focus:ring-ring" placeholder="e.g. SW-001" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div>
               <label className="block text-[9px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1">Colour</label>
               <select value={newColorId ?? ""} onChange={(e) => setNewColorId(e.target.value ? parseInt(e.target.value) : null)} className="w-full px-2.5 py-1.5 bg-background border border-border rounded-lg text-[11px] text-foreground outline-none focus:ring-1 focus:ring-ring">
@@ -562,9 +586,13 @@ export function OrderDetailClient({ order, materials, suppliers, editHistory, us
               <label className="block text-[9px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1">Quantity</label>
               <input type="number" value={newQty} onChange={(e) => setNewQty(parseInt(e.target.value) || 0)} className="w-full px-2.5 py-1.5 bg-background border border-border rounded-lg text-[11px] font-mono-brand text-foreground outline-none focus:ring-1 focus:ring-ring text-right" />
             </div>
+            <div>
+              <label className="block text-[9px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1">Unit Price</label>
+              <input type="number" step="0.01" min="0" value={newUnitPrice} onChange={(e) => setNewUnitPrice(e.target.value)} className="w-full px-2.5 py-1.5 bg-background border border-border rounded-lg text-[11px] font-mono-brand text-foreground outline-none focus:ring-1 focus:ring-ring text-right" placeholder="0.00" />
+            </div>
           </div>
           <div className="flex gap-2">
-            <button onClick={handleAddLine} disabled={isPending || !newProduct.trim()} className="px-3 py-1.5 rounded-lg bg-foreground text-background text-[10px] font-semibold uppercase tracking-wider disabled:opacity-50 transition-colors">Add</button>
+            <button onClick={handleAddLine} disabled={isPending || !newProduct.trim()} className="px-3 py-1.5 rounded-lg bg-foreground text-background text-[10px] font-semibold uppercase tracking-wider disabled:opacity-50 transition-colors">Add Line</button>
             <button onClick={() => setShowAddLine(false)} className="px-3 py-1.5 text-[10px] text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
           </div>
         </div>

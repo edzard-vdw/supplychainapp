@@ -1,5 +1,6 @@
 import { getIronSession, SessionOptions } from "iron-session";
 import { cookies } from "next/headers";
+import { prisma } from "@/lib/db";
 
 export interface SessionData {
   userId: number;
@@ -8,6 +9,7 @@ export interface SessionData {
   role: string;
   supplierId: number | null;
   supplierName: string | null;
+  language: string;
   isLoggedIn: boolean;
 }
 
@@ -29,6 +31,7 @@ export const defaultSession: SessionData = {
   role: "",
   supplierId: null,
   supplierName: null,
+  language: "en",
   isLoggedIn: false,
 };
 
@@ -47,6 +50,23 @@ export async function getSession() {
     session.supplierId = defaultSession.supplierId;
     session.supplierName = defaultSession.supplierName;
     session.isLoggedIn = defaultSession.isLoggedIn;
+  }
+
+  // Always read language fresh from DB so a language change is reflected
+  // immediately on the next page render — no cookie sync required.
+  if (session.isLoggedIn && session.userId) {
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: session.userId },
+        select: { language: true },
+      });
+      session.language = user?.language ?? defaultSession.language;
+    } catch {
+      // DB unavailable — fall back to whatever is in the session cookie
+      if (!session.language) session.language = defaultSession.language;
+    }
+  } else if (!session.language) {
+    session.language = defaultSession.language;
   }
 
   return session;

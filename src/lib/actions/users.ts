@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/db";
 import { hashPassword } from "@/lib/auth";
+import { getSession } from "@/lib/session";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { randomBytes } from "crypto";
@@ -19,16 +20,20 @@ function generateTempPassword(): string {
 
 // ─── Schemas ─────────────────────────────────────────────────────────────────
 
+const SUPPORTED_LANGUAGES = ["en", "ro", "bg", "pt"] as const;
+
 const CreateUserSchema = z.object({
   name: z.string().min(1, "Name is required").max(100),
   email: z.string().email("Valid email required").max(200),
   role: z.enum(["ADMIN", "SUPPLIER", "VIEWER"]),
   supplierId: z.number().int().positive().optional().nullable(),
+  language: z.enum(SUPPORTED_LANGUAGES).optional().default("en"),
 });
 
 const UpdateUserSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   email: z.string().email().max(200).optional(),
+  language: z.enum(SUPPORTED_LANGUAGES).optional(),
 });
 
 // ─── Queries ─────────────────────────────────────────────────────────────────
@@ -74,6 +79,7 @@ export async function createUser(data: Record<string, unknown>) {
         name: parsed.name.trim(),
         role: parsed.role as Role,
         supplierId,
+        language: parsed.language ?? "en",
         password: hashedPassword,
         isActive: true,
       },
@@ -107,6 +113,7 @@ export async function updateUser(id: number, data: Record<string, unknown>) {
     const updateData: Record<string, unknown> = {};
     if (parsed.name !== undefined) updateData.name = parsed.name.trim();
     if (parsed.email !== undefined) updateData.email = parsed.email.toLowerCase().trim();
+    if (parsed.language !== undefined) updateData.language = parsed.language;
 
     if (parsed.email) {
       const existing = await prisma.user.findFirst({
@@ -150,6 +157,24 @@ export async function reactivateUser(id: number) {
     return { success: true };
   } catch {
     return { success: false, error: "Failed to reactivate user" };
+  }
+}
+
+// ─── Set language ────────────────────────────────────────────────────────────
+
+export async function setUserLanguage(id: number, language: string) {
+  if (!SUPPORTED_LANGUAGES.includes(language as typeof SUPPORTED_LANGUAGES[number])) {
+    return { success: false, error: "Unsupported language" };
+  }
+  try {
+    // Just update the DB. getSession() reads language fresh from DB on every
+    // page render, so no cookie manipulation is needed.
+    await prisma.user.update({ where: { id }, data: { language } });
+    revalidatePath("/", "layout");
+    return { success: true };
+  } catch (e) {
+    console.error("setUserLanguage error:", e);
+    return { success: false, error: "Failed to update language" };
   }
 }
 

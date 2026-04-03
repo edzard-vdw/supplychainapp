@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { RefreshCw, CheckCircle, AlertTriangle, UserPlus, KeyRound, EyeOff, Eye, X, Copy, Check, Building2, Plus } from "lucide-react";
-import { createUser, deactivateUser, reactivateUser, resetUserPassword } from "@/lib/actions/users";
-import { createSupplier, deactivateSupplier, reactivateSupplier } from "@/lib/actions/suppliers";
+import { createUser, deactivateUser, reactivateUser, resetUserPassword, setUserLanguage } from "@/lib/actions/users";
+import { LANGUAGES, type Language, t } from "@/lib/i18n";
+import { createSupplier, deactivateSupplier, reactivateSupplier, setSupplierLanguage } from "@/lib/actions/suppliers";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -18,6 +20,7 @@ type SupplierRow = {
   contactName: string | null;
   contactEmail: string | null;
   isActive: boolean;
+  language: string;
   _count: { users: number };
 };
 
@@ -28,6 +31,7 @@ type UserRow = {
   email: string;
   name: string;
   role: string;
+  language: string;
   isActive: boolean;
   supplierId: number | null;
   supplier: SupplierInfo | null;
@@ -37,6 +41,9 @@ type UserRow = {
 interface SettingsClientProps {
   isAdmin: boolean;
   currentUserId: number;
+  currentUserName?: string;
+  currentUserEmail?: string;
+  currentUserLanguage?: string;
   users: UserRow[];
   suppliers: SupplierRow[];
 }
@@ -89,6 +96,7 @@ function AddSupplierForm({ onSuccess, onCancel }: AddSupplierFormProps) {
   const [country, setCountry] = useState("");
   const [contactName, setContactName] = useState("");
   const [contactEmail, setContactEmail] = useState("");
+  const [language, setLanguage] = useState<Language>("en");
   const [error, setError] = useState<string | null>(null);
 
   function handleSubmit(e: React.FormEvent) {
@@ -101,6 +109,7 @@ function AddSupplierForm({ onSuccess, onCancel }: AddSupplierFormProps) {
         country: country.trim() || null,
         contactName: contactName.trim() || null,
         contactEmail: contactEmail.trim() || null,
+        language,
       });
       if (result.success && result.data) {
         onSuccess({
@@ -171,6 +180,25 @@ function AddSupplierForm({ onSuccess, onCancel }: AddSupplierFormProps) {
         </div>
       </div>
 
+      {/* Language */}
+      <div>
+        <label className="block text-[10px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1.5">
+          Supplier Language <span className="normal-case font-normal opacity-60">— sets default for all users</span>
+        </label>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {(Object.entries(LANGUAGES) as [Language, { label: string; flag: string }][]).map(([code, { label, flag }]) => (
+            <button
+              key={code}
+              type="button"
+              onClick={() => setLanguage(code)}
+              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium border transition-all ${language === code ? "bg-badge-blue-bg border-badge-blue-text/30 text-badge-blue-text" : "bg-background border-border text-muted-foreground hover:text-foreground"}`}
+            >
+              {flag} {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {error && (
         <p className="text-[11px] text-badge-red-text flex items-center gap-1.5">
           <AlertTriangle size={13} />
@@ -202,6 +230,7 @@ function AddSupplierForm({ onSuccess, onCancel }: AddSupplierFormProps) {
 
 function SupplierRowComponent({ supplier }: { supplier: SupplierRow }) {
   const [isPending, startTransition] = useTransition();
+  const [changingLang, setChangingLang] = useState(false);
 
   function handleDeactivate() {
     startTransition(async () => { await deactivateSupplier(supplier.id); });
@@ -211,51 +240,90 @@ function SupplierRowComponent({ supplier }: { supplier: SupplierRow }) {
     startTransition(async () => { await reactivateSupplier(supplier.id); });
   }
 
-  return (
-    <div className={`flex items-center gap-3 py-2.5 px-3 rounded-lg transition-colors ${!supplier.isActive ? "opacity-50" : "hover:bg-secondary/30"}`}>
-      {/* Icon */}
-      <div className="w-7 h-7 rounded-full bg-secondary flex items-center justify-center shrink-0">
-        <Building2 size={13} className="text-muted-foreground" />
-      </div>
+  function handleSetLanguage(lang: string) {
+    setChangingLang(false);
+    startTransition(async () => { await setSupplierLanguage(supplier.id, lang); });
+  }
 
-      {/* Name + meta */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-[12px] font-semibold text-foreground truncate">{supplier.name}</span>
-          {!supplier.isActive && (
-            <span className="text-[9px] font-bold uppercase tracking-wider text-badge-red-text bg-badge-red-bg px-1.5 py-0.5 rounded">Inactive</span>
+  const langInfo = LANGUAGES[supplier.language as Language] ?? LANGUAGES.en;
+
+  return (
+    <div className={`py-2.5 px-3 rounded-lg transition-colors ${!supplier.isActive ? "opacity-50" : "hover:bg-secondary/30"}`}>
+      <div className="flex items-center gap-3">
+        {/* Icon */}
+        <div className="w-7 h-7 rounded-full bg-secondary flex items-center justify-center shrink-0">
+          <Building2 size={13} className="text-muted-foreground" />
+        </div>
+
+        {/* Name + meta */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[12px] font-semibold text-foreground truncate">{supplier.name}</span>
+            {!supplier.isActive && (
+              <span className="text-[9px] font-bold uppercase tracking-wider text-badge-red-text bg-badge-red-bg px-1.5 py-0.5 rounded">Inactive</span>
+            )}
+          </div>
+          <p className="text-[10px] text-muted-foreground font-mono-brand">
+            {[supplier.country, supplier.contactName, supplier.contactEmail].filter(Boolean).join(" · ") || "No contact info"}
+            {" · "}
+            <span className="text-muted-foreground/60">{supplier._count.users} {supplier._count.users === 1 ? "user" : "users"}</span>
+          </p>
+        </div>
+
+        <TypeBadge type={supplier.type} />
+
+        {/* Actions */}
+        <div className="flex items-center gap-1 shrink-0">
+          {supplier.isActive ? (
+            <button
+              onClick={handleDeactivate}
+              disabled={isPending}
+              title="Deactivate supplier"
+              className="px-2 py-1 rounded-lg text-muted-foreground hover:text-badge-red-text hover:bg-badge-red-bg/30 disabled:opacity-30 transition-colors text-[10px] font-semibold uppercase tracking-wider"
+            >
+              Deactivate
+            </button>
+          ) : (
+            <button
+              onClick={handleReactivate}
+              disabled={isPending}
+              title="Reactivate supplier"
+              className="px-2 py-1 rounded-lg text-muted-foreground hover:text-badge-green-text hover:bg-badge-green-bg/30 disabled:opacity-30 transition-colors text-[10px] font-semibold uppercase tracking-wider"
+            >
+              Reactivate
+            </button>
           )}
         </div>
-        <p className="text-[10px] text-muted-foreground font-mono-brand">
-          {[supplier.country, supplier.contactName, supplier.contactEmail].filter(Boolean).join(" · ") || "No contact info"}
-          {" · "}
-          <span className="text-muted-foreground/60">{supplier._count.users} {supplier._count.users === 1 ? "user" : "users"}</span>
-        </p>
       </div>
 
-      <TypeBadge type={supplier.type} />
-
-      {/* Actions */}
-      <div className="flex items-center gap-1 shrink-0">
-        {supplier.isActive ? (
-          <button
-            onClick={handleDeactivate}
-            disabled={isPending}
-            title="Deactivate supplier"
-            className="px-2 py-1 rounded-lg text-muted-foreground hover:text-badge-red-text hover:bg-badge-red-bg/30 disabled:opacity-30 transition-colors text-[10px] font-semibold uppercase tracking-wider"
-          >
-            Deactivate
-          </button>
+      {/* Language selector */}
+      <div className="mt-2 ml-10 flex items-center gap-2">
+        {changingLang ? (
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {(Object.entries(LANGUAGES) as [Language, { label: string; flag: string }][]).map(([code, { label, flag }]) => (
+              <button
+                key={code}
+                onClick={() => handleSetLanguage(code)}
+                disabled={isPending}
+                className={`flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium border transition-all disabled:opacity-50 ${supplier.language === code ? "bg-badge-blue-bg border-badge-blue-text/30 text-badge-blue-text" : "bg-background border-border text-muted-foreground hover:text-foreground"}`}
+              >
+                {flag} {label}
+              </button>
+            ))}
+            <button onClick={() => setChangingLang(false)} className="text-[9px] text-muted-foreground hover:text-foreground ml-1">✕</button>
+          </div>
         ) : (
           <button
-            onClick={handleReactivate}
-            disabled={isPending}
-            title="Reactivate supplier"
-            className="px-2 py-1 rounded-lg text-muted-foreground hover:text-badge-green-text hover:bg-badge-green-bg/30 disabled:opacity-30 transition-colors text-[10px] font-semibold uppercase tracking-wider"
+            onClick={() => setChangingLang(true)}
+            className="flex items-center gap-1.5 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+            title="Set language for this supplier and all their users"
           >
-            Reactivate
+            <span>{langInfo.flag}</span>
+            <span>{langInfo.label}</span>
+            <span className="text-[8px] underline opacity-60">change</span>
           </button>
         )}
+        <span className="text-[9px] text-muted-foreground/50">— applies to all users</span>
       </div>
     </div>
   );
@@ -330,6 +398,8 @@ function AddUserForm({ defaultRole, defaultSupplierId, suppliers, onSuccess, onC
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<"ADMIN" | "SUPPLIER" | "VIEWER">(defaultRole);
   const [supplierId, setSupplierId] = useState<number | null>(defaultSupplierId ?? null);
+  const defaultSupplierLang = suppliers.find((s) => s.id === defaultSupplierId)?.language as Language | undefined;
+  const [language, setLanguage] = useState<Language>(defaultSupplierLang ?? "en");
   const [error, setError] = useState<string | null>(null);
 
   const activeSuppliers = suppliers.filter((s) => s.isActive);
@@ -343,6 +413,7 @@ function AddUserForm({ defaultRole, defaultSupplierId, suppliers, onSuccess, onC
         email: email.trim(),
         role,
         supplierId: role === "SUPPLIER" ? supplierId : null,
+        language,
       });
       if (result.success && result.data) {
         onSuccess(result.data as unknown as { user: UserRow; tempPassword: string });
@@ -396,7 +467,13 @@ function AddUserForm({ defaultRole, defaultSupplierId, suppliers, onSuccess, onC
             <label className="block text-[10px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1">Supplier</label>
             <select
               value={supplierId ?? ""}
-              onChange={(e) => setSupplierId(e.target.value ? parseInt(e.target.value) : null)}
+              onChange={(e) => {
+                const newId = e.target.value ? parseInt(e.target.value) : null;
+                setSupplierId(newId);
+                // Auto-set language to match supplier's language
+                const supplierLang = suppliers.find((s) => s.id === newId)?.language as Language | undefined;
+                if (supplierLang) setLanguage(supplierLang);
+              }}
               required
               className="w-full px-3 py-2 bg-card border border-border rounded-lg text-[12px] text-foreground outline-none focus:ring-1 focus:ring-ring"
             >
@@ -411,6 +488,25 @@ function AddUserForm({ defaultRole, defaultSupplierId, suppliers, onSuccess, onC
           </div>
         )}
       </div>
+
+      {role === "SUPPLIER" && (
+        <div>
+          <label className="block text-[10px] font-mono-brand uppercase tracking-widest text-muted-foreground mb-1.5">Interface Language</label>
+          <div className="flex gap-2 flex-wrap">
+            {(Object.entries(LANGUAGES) as [Language, { label: string; flag: string }][]).map(([code, { label, flag }]) => (
+              <button
+                key={code}
+                type="button"
+                onClick={() => setLanguage(code)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium border transition-all ${language === code ? "bg-badge-blue-bg border-badge-blue-text/30 text-badge-blue-text" : "bg-background border-border text-muted-foreground hover:text-foreground"}`}
+              >
+                <span>{flag}</span> {label}
+              </button>
+            ))}
+          </div>
+          <p className="text-[9px] text-muted-foreground mt-1">The supplier portal will display in this language.</p>
+        </div>
+      )}
 
       {error && (
         <p className="text-[11px] text-badge-red-text flex items-center gap-1.5">
@@ -498,8 +594,10 @@ interface UserRowComponentProps {
 }
 
 function UserRowComponent({ user, currentUserId, onPasswordReset }: UserRowComponentProps) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const isSelf = user.id === currentUserId;
+  const [changingLang, setChangingLang] = useState(false);
 
   function handleDeactivate() {
     startTransition(async () => { await deactivateUser(user.id, currentUserId); });
@@ -518,55 +616,97 @@ function UserRowComponent({ user, currentUserId, onPasswordReset }: UserRowCompo
     });
   }
 
+  function handleSetLanguage(lang: string) {
+    setChangingLang(false);
+    startTransition(async () => {
+      await setUserLanguage(user.id, lang);
+      router.refresh();  // admin is changing someone else's language — soft refresh is fine
+    });
+  }
+
+  const langInfo = LANGUAGES[user.language as Language] ?? LANGUAGES.en;
+
   return (
-    <div className={`flex items-center gap-3 py-2.5 px-3 rounded-lg transition-colors ${!user.isActive ? "opacity-50" : "hover:bg-secondary/30"}`}>
-      <div className="w-7 h-7 rounded-full bg-secondary flex items-center justify-center shrink-0">
-        <span className="text-[11px] font-bold text-foreground uppercase">{user.name.charAt(0)}</span>
-      </div>
-
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-[12px] font-semibold text-foreground truncate">{user.name}</span>
-          {isSelf && <span className="text-[9px] font-bold uppercase tracking-wider text-badge-blue-text bg-badge-blue-bg px-1.5 py-0.5 rounded">You</span>}
-          {!user.isActive && <span className="text-[9px] font-bold uppercase tracking-wider text-badge-red-text bg-badge-red-bg px-1.5 py-0.5 rounded">Deactivated</span>}
+    <div className={`py-2.5 px-3 rounded-lg transition-colors ${!user.isActive ? "opacity-50" : "hover:bg-secondary/30"}`}>
+      <div className="flex items-center gap-3">
+        <div className="w-7 h-7 rounded-full bg-secondary flex items-center justify-center shrink-0">
+          <span className="text-[11px] font-bold text-foreground uppercase">{user.name.charAt(0)}</span>
         </div>
-        <p className="text-[10px] text-muted-foreground font-mono-brand truncate">{user.email}</p>
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[12px] font-semibold text-foreground truncate">{user.name}</span>
+            {isSelf && <span className="text-[9px] font-bold uppercase tracking-wider text-badge-blue-text bg-badge-blue-bg px-1.5 py-0.5 rounded">You</span>}
+            {!user.isActive && <span className="text-[9px] font-bold uppercase tracking-wider text-badge-red-text bg-badge-red-bg px-1.5 py-0.5 rounded">Deactivated</span>}
+          </div>
+          <p className="text-[10px] text-muted-foreground font-mono-brand truncate">{user.email}</p>
+        </div>
+
+        <RoleBadge role={user.role} />
+
+        <div className="flex items-center gap-1 shrink-0">
+          <button
+            onClick={handleResetPassword}
+            disabled={isPending || !user.isActive}
+            title="Reset password"
+            className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          >
+            <KeyRound size={13} />
+          </button>
+
+          {!isSelf && (
+            user.isActive ? (
+              <button
+                onClick={handleDeactivate}
+                disabled={isPending}
+                title="Deactivate account"
+                className="px-2 py-1 rounded-lg text-muted-foreground hover:text-badge-red-text hover:bg-badge-red-bg/30 disabled:opacity-30 transition-colors text-[10px] font-semibold uppercase tracking-wider"
+              >
+                Deactivate
+              </button>
+            ) : (
+              <button
+                onClick={handleReactivate}
+                disabled={isPending}
+                title="Reactivate account"
+                className="px-2 py-1 rounded-lg text-muted-foreground hover:text-badge-green-text hover:bg-badge-green-bg/30 disabled:opacity-30 transition-colors text-[10px] font-semibold uppercase tracking-wider"
+              >
+                Reactivate
+              </button>
+            )
+          )}
+        </div>
       </div>
 
-      <RoleBadge role={user.role} />
-
-      <div className="flex items-center gap-1 shrink-0">
-        <button
-          onClick={handleResetPassword}
-          disabled={isPending || !user.isActive}
-          title="Reset password"
-          className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-        >
-          <KeyRound size={13} />
-        </button>
-
-        {!isSelf && (
-          user.isActive ? (
-            <button
-              onClick={handleDeactivate}
-              disabled={isPending}
-              title="Deactivate account"
-              className="px-2 py-1 rounded-lg text-muted-foreground hover:text-badge-red-text hover:bg-badge-red-bg/30 disabled:opacity-30 transition-colors text-[10px] font-semibold uppercase tracking-wider"
-            >
-              Deactivate
-            </button>
+      {/* Language selector — supplier users only */}
+      {user.role === "SUPPLIER" && (
+        <div className="mt-2 ml-10 flex items-center gap-2">
+          {changingLang ? (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {(Object.entries(LANGUAGES) as [Language, { label: string; flag: string }][]).map(([code, { label, flag }]) => (
+                <button
+                  key={code}
+                  onClick={() => handleSetLanguage(code)}
+                  disabled={isPending}
+                  className={`flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium border transition-all disabled:opacity-50 ${user.language === code ? "bg-badge-blue-bg border-badge-blue-text/30 text-badge-blue-text" : "bg-background border-border text-muted-foreground hover:text-foreground"}`}
+                >
+                  {flag} {label}
+                </button>
+              ))}
+              <button onClick={() => setChangingLang(false)} className="text-[9px] text-muted-foreground hover:text-foreground ml-1">✕</button>
+            </div>
           ) : (
             <button
-              onClick={handleReactivate}
-              disabled={isPending}
-              title="Reactivate account"
-              className="px-2 py-1 rounded-lg text-muted-foreground hover:text-badge-green-text hover:bg-badge-green-bg/30 disabled:opacity-30 transition-colors text-[10px] font-semibold uppercase tracking-wider"
+              onClick={() => setChangingLang(true)}
+              className="flex items-center gap-1.5 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
             >
-              Reactivate
+              <span>{langInfo.flag}</span>
+              <span>{langInfo.label}</span>
+              <span className="text-[8px] underline opacity-60">change</span>
             </button>
-          )
-        )}
-      </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -743,9 +883,97 @@ function TeamSection({ users, suppliers, currentUserId }: { users: UserRow[]; su
   );
 }
 
+// ─── Supplier Account Section ─────────────────────────────────────────────────
+
+function SupplierAccountSection({
+  userId,
+  name,
+  email,
+  language: initialLanguage,
+}: {
+  userId: number;
+  name: string;
+  email: string;
+  language: string;
+}) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [language, setLanguage] = useState<Language>((initialLanguage as Language) ?? "en");
+  const [saved, setSaved] = useState(false);
+
+  function handleSetLanguage(lang: Language) {
+    setLanguage(lang);
+    setSaved(false);
+    startTransition(async () => {
+      const result = await setUserLanguage(userId, lang);
+      if (!result.success) {
+        // Revert optimistic update if save failed
+        setLanguage((initialLanguage as Language) ?? "en");
+        alert("Failed to save language — please try again.");
+        return;
+      }
+      // Navigate to jobs page so translated UI is immediately visible
+      window.location.href = "/production-runs";
+    });
+  }
+
+  return (
+    <div className="bg-card border border-border rounded-xl p-6 space-y-5">
+      <div>
+        <h3 className="text-[12px] font-bold uppercase tracking-wider text-foreground mb-0.5">{t("settings.account.title", language)}</h3>
+        <p className="text-[11px] text-muted-foreground">{t("settings.account.subtitle", language)}</p>
+      </div>
+
+      {/* Identity */}
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-1">{t("settings.account.name", language)}</p>
+          <p className="text-[13px] font-semibold text-foreground">{name || "—"}</p>
+        </div>
+        <div>
+          <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-1">{t("settings.account.email", language)}</p>
+          <p className="text-[13px] text-foreground">{email || "—"}</p>
+        </div>
+      </div>
+
+      {/* Language */}
+      <div>
+        <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-2">
+          {t("settings.account.language", language)}
+        </p>
+        <div className="flex items-center gap-2 flex-wrap">
+          {(Object.entries(LANGUAGES) as [Language, { label: string; flag: string }][]).map(([code, { label, flag }]) => (
+            <button
+              key={code}
+              onClick={() => handleSetLanguage(code)}
+              disabled={isPending}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-medium border-2 transition-all disabled:opacity-50 ${
+                language === code
+                  ? "bg-badge-blue-bg border-badge-blue-text/40 text-badge-blue-text"
+                  : "bg-background border-border text-muted-foreground hover:text-foreground hover:border-foreground/20"
+              }`}
+            >
+              <span className="text-[14px]">{flag}</span>
+              {label}
+            </button>
+          ))}
+          {saved && (
+            <span className="text-[10px] text-badge-green-text font-medium flex items-center gap-1">
+              <CheckCircle size={12} /> Saved
+            </span>
+          )}
+        </div>
+        <p className="text-[9px] text-muted-foreground mt-2">
+          {t("settings.account.language_hint", language)}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Settings Component ──────────────────────────────────────────────────
 
-export function SettingsClient({ isAdmin, currentUserId, users, suppliers }: SettingsClientProps) {
+export function SettingsClient({ isAdmin, currentUserId, currentUserName, currentUserEmail, currentUserLanguage = "en", users, suppliers }: SettingsClientProps) {
   const [isPending, startTransition] = useTransition();
   const [baseUrl, setBaseUrl] = useState("https://api.sheepinc.com/api/production");
   const [email, setEmail] = useState("");
@@ -876,12 +1104,14 @@ export function SettingsClient({ isAdmin, currentUserId, users, suppliers }: Set
           </div>
         )}
 
-        {/* ── Non-admin view ── */}
+        {/* ── Non-admin: account + language ── */}
         {!isAdmin && (
-          <div className="bg-card border border-border rounded-xl p-6">
-            <h3 className="text-[12px] font-bold uppercase tracking-wider text-foreground mb-2">Account</h3>
-            <p className="text-[11px] text-muted-foreground">Account settings are managed by your administrator.</p>
-          </div>
+          <SupplierAccountSection
+            userId={currentUserId}
+            name={currentUserName ?? ""}
+            email={currentUserEmail ?? ""}
+            language={currentUserLanguage}
+          />
         )}
       </div>
     </div>

@@ -74,11 +74,12 @@ export function OrdersClient({
     setNewRef(""); setNewClient(""); setNewSupplierId(null); setNewDueDate("");
     setDraftLines([emptyLine()]);
     setShowCreate(false);
-    setShowPOUpload(true);
   }
 
-  // PO upload — supports both Excel and PDF; shown by default, hidden when Manual PO form is open
-  const [showPOUpload, setShowPOUpload] = useState(true);
+  // Upload PO panel is always the default — shown whenever the Manual PO form is NOT open
+  const showPOUpload = !showCreate;
+
+  // PO upload state
   const [poPreview, setPOPreview] = useState<POParseResult | null>(null);
   const [poPdfPreview, setPOPdfPreview] = useState<ParsedPOPdf | null>(null);
   const [poImportResult, setPOImportResult] = useState<{ orderRef: string; supplierMatched: string | null; supplierNotFound: string | null; linesCreated: number; totalQty: number; totalAmount?: number } | null>(null);
@@ -86,8 +87,8 @@ export function OrdersClient({
   const [poDragging, setPoDragging] = useState(false);
 
   useEffect(() => {
-    if (showCreateOnLoad) { setShowCreate(true); setShowPOUpload(false); }
-    else if (showUploadOnLoad) { setShowPOUpload(true); setShowCreate(false); }
+    if (showCreateOnLoad) setShowCreate(true);
+    // showUploadOnLoad is the default; no action needed
   }, [showUploadOnLoad, showCreateOnLoad]);
 
   function handlePODrop(e: React.DragEvent) {
@@ -251,11 +252,7 @@ export function OrdersClient({
         {isAdmin && (
           <div className="flex items-center gap-2">
             <button
-              onClick={() => {
-                const opening = !showCreate;
-                setShowCreate(opening);
-                setShowPOUpload(!opening);
-              }}
+              onClick={() => setShowCreate((c) => !c)}
               className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-[11px] font-semibold uppercase tracking-wider text-white transition-colors"
               style={{ backgroundColor: showCreate ? "hsl(217 91% 60% / 0.7)" : "hsl(217 91% 60%)" }}
             >
@@ -267,7 +264,7 @@ export function OrdersClient({
       )}
 
       {/* Panel slot — Upload PO or New PO form, mutually exclusive */}
-      {(showPOUpload || showCreate) && (
+      {isAdmin && (
       <div className="mb-6">
 
       {showPOUpload && (
@@ -460,7 +457,7 @@ export function OrdersClient({
                 {poImportResult.supplierNotFound && (
                   <p className="text-[10px] text-badge-orange-text mt-1">⚠ Supplier &quot;{poImportResult.supplierNotFound}&quot; not found — assign manually</p>
                 )}
-                <button onClick={() => { setPOImportResult(null); setShowPOUpload(false); }} className="text-[10px] text-primary hover:underline mt-2 inline-block">Done</button>
+                <button onClick={() => setPOImportResult(null)} className="text-[10px] text-primary hover:underline mt-2 inline-block">Done</button>
               </div>
             </div>
           )}

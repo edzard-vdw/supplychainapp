@@ -348,7 +348,7 @@ function PipelineTab({ activeRuns, language }: { activeRuns: ActiveRun[]; langua
   return (
     <div>
       {/* Stage selector */}
-      <div className="flex gap-2 mb-5 overflow-x-auto scrollbar-none pb-1">
+      <div className="flex flex-wrap gap-2 mb-5">
         {RUN_STATUS_ORDER.map((status) => {
           const style = STATUS_STYLE[status];
           const count = runsByStatus[status]?.length ?? 0;
